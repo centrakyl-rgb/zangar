@@ -6,6 +6,9 @@ on:
     # GitHub Actions использует UTC.
     - cron: "0 6 * * *"
   workflow_dispatch:
+  push:
+    paths:
+      - ".github/run-autopost.txt"
 
 concurrency:
   group: telegram-autopost
