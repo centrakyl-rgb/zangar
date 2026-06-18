@@ -1,15 +1,4 @@
 {
-  "published_ids": [
-    "пост-1-66f9b81919cc"
-  ],
-  "history": [
-    {
-      "post_id": "пост-1-66f9b81919cc",
-      "marker": "Пост 1",
-      "message_ids": [
-        2
-      ],
-      "published_at": "2026-06-17T18:34:40.129382+00:00"
-    }
-  ]
+  "published_ids": [],
+  "history": []
 }
