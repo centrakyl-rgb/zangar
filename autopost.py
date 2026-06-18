@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
 import re
 import sys
+import tempfile
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -223,7 +226,7 @@ def send_post(token: str, chat_id: str, post: Post, dry_run: bool = False) -> li
     if post.image:
         if not post.image.exists():
             raise AutopostError(f"Картинка для поста не найдена: {post.image}")
-        with post.image.open("rb") as image_file:
+        with open_image_for_upload(post.image) as image_file:
             data = {"chat_id": chat_id}
             if len(post.text) <= MAX_PHOTO_CAPTION:
                 data["caption"] = post.text
@@ -239,6 +242,32 @@ def send_post(token: str, chat_id: str, post: Post, dry_run: bool = False) -> li
         payload = telegram_request(token, "sendMessage", data={"chat_id": chat_id, "text": chunk})
         message_ids.append(payload["result"]["message_id"])
     return message_ids
+
+
+@contextmanager
+def open_image_for_upload(path: Path):
+    if path.suffix.lower() != ".b64":
+        with path.open("rb") as image_file:
+            yield image_file
+        return
+
+    suffixes = path.suffixes
+    image_suffix = suffixes[-2] if len(suffixes) >= 2 else ".jpg"
+    raw = base64.b64decode(path.read_text(encoding="utf-8"))
+    temp_path: str | None = None
+
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=image_suffix) as temp:
+            temp.write(raw)
+            temp_path = temp.name
+        with open(temp_path, "rb") as image_file:
+            yield image_file
+    finally:
+        if temp_path:
+            try:
+                Path(temp_path).unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def mark_published(state: dict[str, Any], post: Post, message_ids: list[int]) -> None:
