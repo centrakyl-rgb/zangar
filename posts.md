@@ -1,5 +1,5 @@
 ### История нашей мечети — мечеть «Зангар»
-image: images/zangar-old-building-no-text-post.jpg.b64
+image: images/zangar-old-building-fixed.jpg
 
 История нашей мечети
 
