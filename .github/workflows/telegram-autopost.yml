@@ -1,6 +1,9 @@
 name: Telegram autopost
 
 on:
+  push:
+    paths:
+      - ".github/run-autopost.txt"
   schedule:
     # 09:00 Europe/Moscow = 06:00 UTC.
     # GitHub Actions использует UTC.
