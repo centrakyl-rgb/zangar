@@ -164,5 +164,9 @@
   function staffLabel(p,a){if(p.role!=="teacher")return roleName(p.role);var own=a.filter(function(x){return x.teacher_id===p.id});if(!own.length)return "учитель · предмет не назначен";return own.map(function(x){return "учитель "+(x.subjects&&x.subjects.name)+" · "+(x.groups&&x.groups.name)}).join(", ")}
   function attendance(x){return {present:"на занятии",absent:"пропуск",ill:"болезнь"}[x]||x}
   function lessonStatus(x,a){return {passed:"сдал",unprepared:"не подготовил",absent:"отсутствует",ill:"болен"}[x]||attendance(a)}
+  var pullStart=0,pullReady=false;
+  document.addEventListener("touchstart",function(e){if(window.scrollY===0&&profile){pullStart=e.touches[0].clientY;pullReady=false}}, {passive:true});
+  document.addEventListener("touchmove",function(e){if(!pullStart)return;var distance=e.touches[0].clientY-pullStart;if(distance>85){pullReady=true;var d=$("pullRefresh");if(!d){d=document.createElement("div");d.id="pullRefresh";d.className="empty";d.style.cssText="position:fixed;top:8px;left:25%;width:50%;z-index:20;background:#fff;border-radius:20px;box-shadow:0 4px 18px #0002";document.body.appendChild(d)}d.textContent="Отпустите, чтобы обновить"}}, {passive:true});
+  document.addEventListener("touchend",async function(){var d=$("pullRefresh");if(d)d.remove();var ready=pullReady;pullStart=0;pullReady=false;if(ready&&profile){$("dash").innerHTML='<div class="empty">Обновление…</div>';try{await render()}catch(err){alert(err.message)}}}, {passive:true});
   try{var saved=JSON.parse(localStorage.getItem("akyl_auth")||"null");if(saved&&saved.user){token=saved.token||"";refreshToken=saved.refreshToken||"";user=saved.user;loadProfile().catch(async function(){try{await refreshSession();await loadProfile()}catch(err){localStorage.removeItem("akyl_auth");showLogin("Войдите снова.")}})}}catch(e){}
 })();
