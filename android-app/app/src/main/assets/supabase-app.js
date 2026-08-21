@@ -41,12 +41,13 @@
     }catch(err){$("error").textContent=err.message}
   }
   async function loadProfile(){
-    var rows=await api("/rest/v1/profiles?id=eq."+encodeURIComponent(user.id)+"&select=id,full_name,role,active,is_deputy");
+    var rows=await api("/rest/v1/profiles?id=eq."+encodeURIComponent(user.id)+"&select=id,full_name,role,active,is_deputy,deputy_scope");
     if(!rows.length)throw new Error("Для этого пользователя ещё не назначена роль");
     profile=rows[0];if(!profile.active)throw new Error("Регистрация принята. Директор ещё не назначил вам роль.");
     $("login").classList.add("hidden");$("app").classList.remove("hidden");
     $("user").textContent=profile.full_name||user.email;
-    $("role").textContent=profile.is_deputy&&profile.role==="teacher"?"Учитель · заместитель по учебной части":({director:"Директор",deputy:"Заместитель по учебной части",teacher:"Учитель",admin:"Администратор",cleaner:"Уборщик"}[profile.role]);
+    var scopeName={religious:"зам по религиозным наукам",secular:"зам по светским наукам",both:"зам по всем учебным направлениям"}[profile.deputy_scope]||"заместитель по учебной части";
+    $("role").textContent=profile.is_deputy&&profile.role==="teacher"?"Учитель · "+scopeName:({director:"Директор",deputy:"Заместитель по учебной части",teacher:"Учитель",educator:"Воспитатель",admin:"Администратор",cleaner:"Уборщик"}[profile.role]);
     await render();
   }
   $("loginForm").onsubmit=async function(e){
@@ -64,6 +65,7 @@
     if(profile.role==="teacher")await renderTeacher();
     else if(profile.role==="director")await renderDirector();
     else if(profile.role==="deputy")await renderDeputy();
+    else if(profile.role==="educator")await renderEducator();
     else if(profile.role==="cleaner")await renderCleaner();
     else await renderAdmin();
   }
@@ -91,7 +93,7 @@
   async function saveQuickClass(e,choices){
     e.preventDefault();var button=e.target.querySelector("button"),today=new Date().toISOString().slice(0,10);button.disabled=true;button.textContent="Сохранение…";
     try{
-      var rows=Array.from(document.querySelectorAll(".quickStatus")).map(function(s){var i=Number(s.dataset.i),x=choices[i],status=s.value,plan=document.querySelector('.quickPlan[data-i="'+i+'"]').value.trim();return {lesson_date:today,teacher_id:user.id,student_id:x.student.id,subject_id:x.subject.id,attendance:status==="ill"?"ill":status==="absent"?"absent":"present",lesson_status:status,plan_text:plan,mistakes:0,comment:status==="unprepared"?"Не подготовил урок":null}});
+      var rows=Array.from(document.querySelectorAll(".quickStatus")).map(function(s){var i=Number(s.dataset.i),x=choices[i],status=s.value,plan=document.querySelector('.quickPlan[data-i="'+i+'"]').value.trim();return {lesson_date:today,teacher_id:user.id,student_id:x.student.id,subject_id:x.subject.id,attendance:status==="ill"?"ill":status==="absent"?"absent":"present",lesson_status:status,plan_text:plan,comment:status==="unprepared"?"Не подготовил урок":null}});
       await api("/rest/v1/journal_entries?on_conflict=lesson_date,teacher_id,student_id,subject_id",{method:"POST",headers:{"Prefer":"return=minimal,resolution=merge-duplicates"},body:JSON.stringify(rows)});await renderTeacher();
     }catch(err){alert(err.message);button.disabled=false;button.textContent="Сохранить отметки за сегодня"}
   }
@@ -115,13 +117,14 @@
   }
   async function renderDirector(){
     var entries=await api("/rest/v1/journal_entries?select=lesson_date,grade,attendance,lesson_status,students(id,full_name),subjects(name),profiles!journal_entries_teacher_id_fkey(full_name)&order=lesson_date.desc&limit=500");
-    var staff=await api("/rest/v1/profiles?select=id,full_name,role,active,is_deputy,created_at&order=created_at.asc");
+    var staff=await api("/rest/v1/profiles?select=id,full_name,role,active,is_deputy,deputy_scope,created_at&order=created_at.asc");
     var groups=await api("/rest/v1/groups?select=id,name,students(id,full_name)&active=eq.true&order=name.asc");
     var subjects=await api("/rest/v1/subjects?select=id,name&order=name.asc");
     var teacherAssignments=await api("/rest/v1/teacher_assignments?select=teacher_id,groups(name),subjects(name)");
     var allStudents=await api("/rest/v1/students?active=eq.true&select=id,full_name&order=full_name");
     var assessments=await api("/rest/v1/juz_assessments?select=assessment_date,juz_number,hifz_errors,tajwid_errors,score,decision,students(full_name)&order=assessment_date.desc&limit=50");
     var notifications=await api("/rest/v1/notifications?recipient_id=eq."+user.id+"&select=id,title,message,created_at&order=created_at.desc&limit=30");
+    var educatorNotes=await api("/rest/v1/educator_notes?select=note_date,category,note,students(full_name),profiles!educator_notes_educator_id_fkey(full_name)&order=note_date.desc&limit=50");
     var today=new Date().toISOString().slice(0,10);
     var checkins=await api("/rest/v1/daily_checkins?work_date=eq."+today+"&select=reporter_id,check_type,completed,problem_note,profiles(full_name,role)");
     var map={};entries.forEach(function(e){var s=e.students;if(!s)return;if(!map[s.id])map[s.id]={name:s.full_name,grades:[],present:0,absent:0,ill:0,passed:0,unprepared:0,lessons:0};var x=map[s.id];x.lessons++;if(e.grade)x.grades.push(Number(e.grade));x[e.attendance]++;if(e.lesson_status==="passed")x.passed++;if(e.lesson_status==="unprepared")x.unprepared++});
@@ -130,9 +133,10 @@
     var studentOptions=allStudents.map(function(s){return '<option value="'+s.id+'">'+esc(s.full_name)+'</option>'}).join("");
     var assessmentRows=assessments.map(function(a){return '<div class="item"><div class="row"><strong>'+esc(a.students&&a.students.full_name)+' · '+a.juz_number+' джуз</strong><span class="badge">'+a.score+' баллов</span></div><p>Хифз: '+a.hifz_errors+' · таджвид: '+a.tajwid_errors+' · '+esc(a.decision||'')+'</p></div>'}).join("")||'<div class="empty">Контрольных сдач пока нет</div>';
     var notificationRows=notifications.map(function(n){return '<div class="item"><strong>'+esc(n.title)+'</strong><p>'+esc(n.message)+' · '+new Date(n.created_at).toLocaleString('ru-RU')+'</p></div>'}).join("")||'<div class="empty">Новых уведомлений нет</div>';
+    var educatorRows=educatorNotes.map(function(n){return '<div class="item"><strong>'+esc(n.students&&n.students.full_name)+' · '+esc(n.category)+'</strong><p>'+esc(n.note)+' · '+esc(n.note_date)+' · '+esc(n.profiles&&n.profiles.full_name)+'</p></div>'}).join("")||'<div class="empty">Записей воспитателя пока нет</div>';
     var assignees=staff.filter(function(p){return p.role!=="director"&&p.active}).map(function(p){return '<option value="'+p.id+'">'+esc(p.full_name)+" · "+staffLabel(p,teacherAssignments)+"</option>"}).join("");
-    var pending=staff.filter(function(p){return !p.active}).map(function(p){return '<div class="item"><strong>'+esc(p.full_name)+'</strong><div class="grid" style="margin-top:9px"><select data-role="'+p.id+'"><option value="teacher">Учитель</option><option value="deputy">Заместитель по учебной части</option><option value="admin">Администратор</option><option value="cleaner">Уборщик</option></select><button class="btn green" data-approve="'+p.id+'">Подтвердить</button></div></div>'}).join("")||'<div class="empty">Новых регистраций нет</div>';
-    var deputyControls=staff.filter(function(p){return p.active&&p.role!=="director"}).map(function(p){return '<div class="item"><div class="row"><strong>'+esc(p.full_name)+'</strong><button class="btn '+(p.is_deputy?'':'green')+'" data-deputy="'+p.id+'" data-value="'+(!p.is_deputy)+'">'+(p.is_deputy?'Снять полномочия зама':'Назначить замом')+'</button></div><p>'+roleName(p.role)+'</p></div>'}).join("")||'<div class="empty">Сотрудников пока нет</div>';
+    var pending=staff.filter(function(p){return !p.active}).map(function(p){return '<div class="item"><strong>'+esc(p.full_name)+'</strong><div class="grid" style="margin-top:9px"><select data-role="'+p.id+'"><option value="teacher">Учитель</option><option value="educator">Воспитатель</option><option value="deputy">Заместитель по учебной части</option><option value="admin">Администратор</option><option value="cleaner">Уборщик</option></select><button class="btn green" data-approve="'+p.id+'">Подтвердить</button></div></div>'}).join("")||'<div class="empty">Новых регистраций нет</div>';
+    var deputyControls=staff.filter(function(p){return p.active&&p.role!=="director"}).map(function(p){var s=p.deputy_scope||'none';return '<div class="item"><strong>'+esc(p.full_name)+'</strong><p>'+roleName(p.role)+'</p><div class="grid" style="margin-top:9px"><button class="btn '+(s==='religious'||s==='both'?'':'green')+'" data-deputy-scope="religious" data-current="'+s+'" data-id="'+p.id+'">Религиозные науки</button><button class="btn '+(s==='secular'||s==='both'?'':'green')+'" data-deputy-scope="secular" data-current="'+s+'" data-id="'+p.id+'">Светские науки</button></div></div>'}).join("")||'<div class="empty">Сотрудников пока нет</div>';
     var teachers=staff.filter(function(p){return p.role==="teacher"&&p.active});
     var groupOptions=groups.map(function(g){return '<option value="'+g.id+'">'+esc(g.name)+'</option>'}).join("");
     var subjectOptions=subjects.map(function(s){return '<option value="'+s.id+'">'+esc(s.name)+'</option>'}).join("");
@@ -141,10 +145,11 @@
     var daily=checkins.map(function(c){return '<div class="item"><div class="row"><strong>'+esc(c.profiles&&c.profiles.full_name)+'</strong><span class="badge '+(c.completed?"":"todo")+'">'+(c.completed?"Выполнено":"Есть проблема")+'</span></div><p>'+labelCheck(c.check_type)+(c.problem_note?" · "+esc(c.problem_note):"")+"</p></div>"}).join("")||'<div class="empty">Сегодня сотрудники ещё не закрывали рабочий день</div>';
     $("dash").innerHTML='<div class="hero"><h2>Успеваемость центра</h2><p>Директор контролирует сотрудников и принимает подготовленный джуз.</p></div><div class="stats"><div class="stat"><strong>'+list.length+'</strong><span>учеников с записями</span></div><div class="stat"><strong>'+entries.length+'</strong><span>уроков в журнале</span></div></div><section class="panel"><h3>Контрольная сдача джуза</h3>'+(studentOptions?'<form id="assessmentForm" class="grid"><div class="full"><label>Ученик</label><select id="assessmentStudent">'+studentOptions+'</select></div><div><label>Номер джуза</label><input id="assessmentJuz" type="number" min="1" max="30" required></div><div><label>Ошибки по хифзу (−3)</label><input id="hifzErrors" type="number" min="0" value="0"></div><div><label>Ошибки по таджвиду (−1,5)</label><input id="tajwidErrors" type="number" min="0" value="0"></div><div><label>Решение</label><select id="assessmentDecision"><option>Готов к сдаче</option><option>Исправить и повторить</option><option>Пока не готов</option></select></div><button class="btn green full">Рассчитать и сохранить</button></form>':'<div class="empty">Заместителю нужно добавить учеников</div>')+'<div class="list" style="margin-top:12px">'+assessmentRows+'</div></section><section class="panel"><h3>Новые сотрудники</h3><div class="list">'+pending+'</div></section><section class="panel"><h3>Заместитель по учебной части</h3><div class="list">'+deputyControls+'</div></section><section class="panel"><h3>Предметы учителей</h3>'+(teachers.length&&groups.length?'<form id="assignmentForm" class="grid"><div><label>Учитель</label><select id="assignTeacher">'+teacherOptions+'</select></div><div><label>Группа</label><select id="assignGroup">'+groupOptions+'</select></div><div><label>Предмет</label><select id="assignSubject">'+subjectOptions+'</select></div><button class="btn green">Назначить</button></form>':'<div class="empty">Заместителю нужно создать группу, затем здесь можно назначить предмет</div>')+'<div class="list" style="margin-top:12px">'+assignmentList+'</div></section><section class="panel"><h3>Итог сегодняшнего дня</h3><div class="list">'+daily+'</div></section><section class="panel"><h3>Сравнение учеников</h3><div class="list">'+compare+'</div></section><section class="panel"><h3>Поставить задачу</h3>'+(assignees?'<form id="taskForm" class="grid"><div><label>Исполнитель</label><select id="assignee">'+assignees+'</select></div><div><label>Срок</label><input id="due" type="date"></div><div class="full"><label>Название</label><input id="taskTitle" required></div><div class="full"><label>Описание</label><textarea id="taskDescription"></textarea></div><button class="btn green full">Назначить</button></form>':'<div class="empty">Сначала добавьте сотрудников</div>')+"</section>";
     $("dash").insertAdjacentHTML("afterbegin",'<section class="panel"><h3>Уведомления</h3><div class="list">'+notificationRows+'</div></section>');
+    $("dash").insertAdjacentHTML("beforeend",'<section class="panel"><h3>Записи воспитателя</h3><div class="list">'+educatorRows+'</div></section>');
     if(assignees)$("taskForm").onsubmit=saveTask;
     if(studentOptions)$("assessmentForm").onsubmit=saveAssessment;
     if(teachers.length&&groups.length)$("assignmentForm").onsubmit=saveAssignment;
-    document.querySelectorAll("[data-deputy]").forEach(function(b){b.onclick=async function(){b.disabled=true;try{await api("/rest/v1/profiles?id=eq."+b.dataset.deputy,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({is_deputy:b.dataset.value==="true"})});await renderDirector()}catch(err){alert(err.message);b.disabled=false}}});
+    document.querySelectorAll("[data-deputy-scope]").forEach(function(b){b.onclick=async function(){b.disabled=true;var cur=b.dataset.current,want=b.dataset.deputyScope,next;if(cur==='both')next=want==='religious'?'secular':'religious';else if(cur===want)next='none';else if(cur==='none'||!cur)next=want;else next='both';try{await api("/rest/v1/profiles?id=eq."+b.dataset.id,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({deputy_scope:next,is_deputy:next!=='none'})});await renderDirector()}catch(err){alert(err.message);b.disabled=false}}});
     document.querySelectorAll("[data-approve]").forEach(function(b){b.onclick=async function(){var id=b.dataset.approve,sel=document.querySelector('[data-role="'+id+'"]');b.disabled=true;try{await api("/rest/v1/rpc/approve_staff",{method:"POST",body:JSON.stringify({p_user:id,p_role:sel.value,p_name:b.closest(".item").querySelector("strong").textContent})});await renderDirector()}catch(err){alert(err.message);b.disabled=false}}});
     await addSchedulePanel(false,false);
   }
@@ -196,6 +201,12 @@
     $("dash").innerHTML='<div class="hero"><h2>Итог рабочего дня</h2><p>Один короткий ответ вместо отдельного журнала.</p></div>';
     await addDailyPrompt("cleaning","Уборка сегодня выполнена?");
   }
+  async function renderEducator(){
+    var students=await api("/rest/v1/students?active=eq.true&select=id,full_name&order=full_name"),notes=await api("/rest/v1/educator_notes?educator_id=eq."+user.id+"&select=note_date,category,note,students(full_name)&order=note_date.desc&limit=60");
+    var opts=students.map(function(s){return '<option value="'+s.id+'">'+esc(s.full_name)+'</option>'}).join(''),rows=notes.map(function(n){return '<div class="item"><strong>'+esc(n.students&&n.students.full_name)+' · '+esc(n.category)+'</strong><p>'+esc(n.note)+' · '+esc(n.note_date)+'</p></div>'}).join('')||'<div class="empty">Записей пока нет</div>';
+    $("dash").innerHTML='<div class="hero"><h2>Журнал воспитателя</h2><p>Короткие наблюдения по поведению, дисциплине и состоянию учеников.</p></div><section class="panel"><h3>Новая запись</h3>'+(opts?'<form id="educatorForm" class="grid"><div><label>Ученик</label><select id="educatorStudent">'+opts+'</select></div><div><label>Раздел</label><select id="educatorCategory"><option>Поведение</option><option>Дисциплина</option><option>Здоровье</option><option>Другое</option></select></div><div class="full"><label>Наблюдение</label><textarea id="educatorNote" required></textarea></div><button class="btn green full">Сохранить</button></form>':'<div class="empty">Заместитель ещё не добавил учеников</div>')+'</section><section class="panel"><h3>Мои записи</h3><div class="list">'+rows+'</div></section>';
+    if(opts)$("educatorForm").onsubmit=async function(e){e.preventDefault();try{await api("/rest/v1/educator_notes",{method:"POST",headers:{"Prefer":"return=minimal"},body:JSON.stringify({educator_id:user.id,student_id:$("educatorStudent").value,category:$("educatorCategory").value,note:$("educatorNote").value.trim()})});await renderEducator()}catch(err){alert(err.message)}};
+  }
   async function addDailyPrompt(type,question){
     var today=new Date().toISOString().slice(0,10),rows=await api("/rest/v1/daily_checkins?reporter_id=eq."+user.id+"&work_date=eq."+today+"&check_type=eq."+type+"&select=id,completed,problem_note"),old=rows[0];
     var section=document.createElement("section");section.className="panel";
@@ -204,7 +215,7 @@
     if(!old){$("dailyForm").onsubmit=async function(e){e.preventDefault();var completed=$("dailyCompleted").value==="true",note=$("dailyNote").value.trim();if(!completed&&!note){alert("При ответе «нет» коротко укажите причину");return}await api("/rest/v1/daily_checkins",{method:"POST",headers:{"Prefer":"return=minimal,resolution=merge-duplicates"},body:JSON.stringify({work_date:today,reporter_id:user.id,check_type:type,completed:completed,problem_note:note||null})});await render()}}
   }
   function labelCheck(x){return {lessons:"Ученики отмечены",cleaning:"Уборка",admin_tasks:"Задачи администратора"}[x]||x}
-  function roleName(x){return {teacher:"учитель",deputy:"заместитель по учебной части",admin:"администратор",cleaner:"уборщик"}[x]||x}
+  function roleName(x){return {teacher:"учитель",educator:"воспитатель",deputy:"заместитель по учебной части",admin:"администратор",cleaner:"уборщик"}[x]||x}
   function staffLabel(p,a){if(p.role!=="teacher")return roleName(p.role);var own=a.filter(function(x){return x.teacher_id===p.id});if(!own.length)return "учитель · предмет не назначен";return own.map(function(x){return "учитель "+(x.subjects&&x.subjects.name)+" · "+(x.groups&&x.groups.name)}).join(", ")}
   function attendance(x){return {present:"на занятии",absent:"пропуск",ill:"болезнь"}[x]||x}
   function lessonStatus(x,a){return {passed:"сдал",unprepared:"не подготовил",absent:"отсутствует",ill:"болен"}[x]||attendance(a)}
