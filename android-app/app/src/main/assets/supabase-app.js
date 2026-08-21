@@ -2,7 +2,7 @@
   "use strict";
   var URL="https://ihevokoybbchdsujcpls.supabase.co";
   var KEY="sb_publishable_36ExgycbIBA2Hd7ZmSEu_A_65KsGs-X";
-  var token="",user=null,profile=null,assignments=[];
+  var token="",refreshToken="",user=null,profile=null,assignments=[];
   var $=function(id){return document.getElementById(id)};
   var esc=function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})};
   async function api(path,options){
@@ -20,9 +20,14 @@
   }
   async function login(email,password){
     var data=await api("/auth/v1/token?grant_type=password",{method:"POST",body:JSON.stringify({email:email,password:password})});
-    token=data.access_token;user=data.user;
-    localStorage.setItem("akyl_auth",JSON.stringify({token:token,user:user}));
+    token=data.access_token;refreshToken=data.refresh_token||"";user=data.user;saveAuth();
     await loadProfile();
+  }
+  function saveAuth(){localStorage.setItem("akyl_auth",JSON.stringify({token:token,refreshToken:refreshToken,user:user}))}
+  async function refreshSession(){
+    if(!refreshToken)throw new Error("Сеанс закончился");
+    var data=await api("/auth/v1/token?grant_type=refresh_token",{method:"POST",body:JSON.stringify({refresh_token:refreshToken})});
+    token=data.access_token;refreshToken=data.refresh_token||refreshToken;user=data.user||user;saveAuth();
   }
   async function signup(){
     var name=$("fullName").value.trim(),email=$("username").value.trim(),password=$("password").value;
@@ -31,7 +36,7 @@
     $("error").textContent="Создание аккаунта…";
     try{
       var data=await api("/auth/v1/signup",{method:"POST",body:JSON.stringify({email:email,password:password,data:{full_name:name}})});
-      if(data.access_token){token=data.access_token;user=data.user;localStorage.setItem("akyl_auth",JSON.stringify({token:token,user:user}));await loadProfile()}
+      if(data.access_token){token=data.access_token;refreshToken=data.refresh_token||"";user=data.user;saveAuth();await loadProfile()}
       else $("error").textContent="Аккаунт создан. Подтвердите почту и затем войдите.";
     }catch(err){$("error").textContent=err.message}
   }
@@ -52,7 +57,7 @@
   $("signup").onclick=signup;
   $("logout").onclick=async function(){
     try{await api("/auth/v1/logout",{method:"POST"})}catch(e){}
-    localStorage.removeItem("akyl_auth");token="";user=null;profile=null;$("password").value="";showLogin();
+    localStorage.removeItem("akyl_auth");token="";refreshToken="";user=null;profile=null;$("password").value="";showLogin();
   };
   async function render(){
     $("dash").innerHTML='<div class="empty">Загрузка журнала…</div>';
@@ -150,5 +155,5 @@
   function staffLabel(p,a){if(p.role!=="teacher")return roleName(p.role);var own=a.filter(function(x){return x.teacher_id===p.id});if(!own.length)return "учитель · предмет не назначен";return own.map(function(x){return "учитель "+(x.subjects&&x.subjects.name)+" · "+(x.groups&&x.groups.name)}).join(", ")}
   function attendance(x){return {present:"на занятии",absent:"пропуск",ill:"болезнь"}[x]||x}
   function lessonStatus(x,a){return {passed:"сдал",unprepared:"не подготовил",absent:"отсутствует",ill:"болен"}[x]||attendance(a)}
-  try{var saved=JSON.parse(localStorage.getItem("akyl_auth")||"null");if(saved&&saved.token&&saved.user){token=saved.token;user=saved.user;loadProfile().catch(function(){localStorage.removeItem("akyl_auth");showLogin("Сеанс закончился. Войдите снова.")})}}catch(e){}
+  try{var saved=JSON.parse(localStorage.getItem("akyl_auth")||"null");if(saved&&saved.user){token=saved.token||"";refreshToken=saved.refreshToken||"";user=saved.user;loadProfile().catch(async function(){try{await refreshSession();await loadProfile()}catch(err){localStorage.removeItem("akyl_auth");showLogin("Войдите снова.")}})}}catch(e){}
 })();
