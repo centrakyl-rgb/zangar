@@ -2,7 +2,7 @@
   "use strict";
   var URL="https://ihevokoybbchdsujcpls.supabase.co";
   var KEY="sb_publishable_36ExgycbIBA2Hd7ZmSEu_A_65KsGs-X";
-  var token="",refreshToken="",user=null,profile=null,assignments=[];
+  var token="",refreshToken="",user=null,profile=null,assignments=[],loginDirectory=[];
   var $=function(id){return document.getElementById(id)};
   var esc=function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})};
   async function api(path,options){
@@ -29,17 +29,8 @@
     var data=await api("/auth/v1/token?grant_type=refresh_token",{method:"POST",body:JSON.stringify({refresh_token:refreshToken})});
     token=data.access_token;refreshToken=data.refresh_token||refreshToken;user=data.user||user;saveAuth();
   }
-  async function signup(){
-    var name=$("fullName").value.trim(),email=$("username").value.trim(),password=$("password").value;
-    if(!name){$("error").textContent="Укажите имя и фамилию";return}
-    if(password.length<6){$("error").textContent="Пароль должен содержать не менее 6 символов";return}
-    $("error").textContent="Создание аккаунта…";
-    try{
-      var data=await api("/auth/v1/signup",{method:"POST",body:JSON.stringify({email:email,password:password,data:{full_name:name}})});
-      if(data.access_token){token=data.access_token;refreshToken=data.refresh_token||"";user=data.user;saveAuth();await loadProfile()}
-      else $("error").textContent="Аккаунт создан. Подтвердите почту и затем войдите.";
-    }catch(err){$("error").textContent=err.message}
-  }
+  async function loadLoginDirectory(){try{loginDirectory=await api("/rest/v1/rpc/login_directory",{method:"POST",body:"{}"});renderLoginPeople()}catch(e){$("loginPerson").innerHTML='<option value="">Сначала выполните обновление базы</option>'}}
+  function renderLoginPeople(){var role=$("loginRole").value,people=loginDirectory.filter(function(p){return p.role===role});$("loginPerson").innerHTML=people.map(function(p){return '<option value="'+esc(p.login_email)+'">'+esc(p.full_name)+'</option>'}).join('')||'<option value="">Сотрудники не добавлены</option>'}
   async function loadProfile(){
     var rows=await api("/rest/v1/profiles?id=eq."+encodeURIComponent(user.id)+"&select=id,full_name,role,active,is_deputy,deputy_scope");
     if(!rows.length)throw new Error("Для этого пользователя ещё не назначена роль");
@@ -52,13 +43,13 @@
   }
   $("loginForm").onsubmit=async function(e){
     e.preventDefault();$("error").textContent="Подключение…";
-    try{await login($("username").value.trim(),$("password").value)}
+    try{var email=$("loginPerson").value;if(!email)throw new Error("Выберите сотрудника");await login(email,$("password").value)}
     catch(err){showLogin(err.message)}
   };
-  $("signup").onclick=signup;
+  $("loginRole").onchange=renderLoginPeople;
   $("logout").onclick=async function(){
     try{await api("/auth/v1/logout",{method:"POST"})}catch(e){}
-    localStorage.removeItem("akyl_auth");token="";refreshToken="";user=null;profile=null;$("password").value="";showLogin();
+    localStorage.removeItem("akyl_auth");token="";refreshToken="";user=null;profile=null;$("password").value="";showLogin();await loadLoginDirectory();
   };
   async function render(){
     $("dash").innerHTML='<div class="empty">Загрузка журнала…</div>';
@@ -146,14 +137,26 @@
     var assignmentList=teacherAssignments.map(function(a){var t=staff.find(function(p){return p.id===a.teacher_id});return '<div class="item"><strong>'+esc(t&&t.full_name)+'</strong><p>'+esc(a.subjects&&a.subjects.name)+" · "+esc(a.groups&&a.groups.name)+"</p></div>"}).join("")||'<div class="empty">Назначений пока нет</div>';
     var daily=checkins.map(function(c){return '<div class="item"><div class="row"><strong>'+esc(c.profiles&&c.profiles.full_name)+'</strong><span class="badge '+(c.completed?"":"todo")+'">'+(c.completed?"Выполнено":"Есть проблема")+'</span></div><p>'+labelCheck(c.check_type)+(c.problem_note?" · "+esc(c.problem_note):"")+"</p></div>"}).join("")||'<div class="empty">Сегодня сотрудники ещё не закрывали рабочий день</div>';
     $("dash").innerHTML='<div class="hero"><h2>Успеваемость центра</h2><p>Директор контролирует сотрудников и принимает подготовленный джуз.</p></div><div class="stats"><div class="stat"><strong>'+list.length+'</strong><span>учеников с записями</span></div><div class="stat"><strong>'+entries.length+'</strong><span>уроков в журнале</span></div></div><section class="panel"><h3>Контрольная сдача джуза</h3>'+(studentOptions?'<form id="assessmentForm" class="grid"><div class="full"><label>Ученик</label><select id="assessmentStudent">'+studentOptions+'</select></div><div><label>Номер джуза</label><input id="assessmentJuz" type="number" min="1" max="30" required></div><div><label>Ошибки по хифзу (−3)</label><input id="hifzErrors" type="number" min="0" value="0"></div><div><label>Ошибки по таджвиду (−1,5)</label><input id="tajwidErrors" type="number" min="0" value="0"></div><div><label>Решение</label><select id="assessmentDecision"><option>Готов к сдаче</option><option>Исправить и повторить</option><option>Пока не готов</option></select></div><button class="btn green full">Рассчитать и сохранить</button></form>':'<div class="empty">Заместителю нужно добавить учеников</div>')+'<div class="list" style="margin-top:12px">'+assessmentRows+'</div></section><section class="panel"><h3>Новые сотрудники</h3><div class="list">'+pending+'</div></section><section class="panel"><h3>Заместитель по учебной части</h3><div class="list">'+deputyControls+'</div></section><section class="panel"><h3>Предметы учителей</h3>'+(teachers.length&&groups.length?'<form id="assignmentForm" class="grid"><div><label>Учитель</label><select id="assignTeacher">'+teacherOptions+'</select></div><div><label>Группа</label><select id="assignGroup">'+groupOptions+'</select></div><div><label>Предмет</label><select id="assignSubject">'+subjectOptions+'</select></div><button class="btn green">Назначить</button></form>':'<div class="empty">Заместителю нужно создать группу, затем здесь можно назначить предмет</div>')+'<div class="list" style="margin-top:12px">'+assignmentList+'</div></section><section class="panel"><h3>Итог сегодняшнего дня</h3><div class="list">'+daily+'</div></section><section class="panel"><h3>Сравнение учеников</h3><div class="list">'+compare+'</div></section><section class="panel"><h3>Поставить задачу</h3>'+(assignees?'<form id="taskForm" class="grid"><div><label>Исполнитель</label><select id="assignee">'+assignees+'</select></div><div><label>Срок</label><input id="due" type="date"></div><div class="full"><label>Название</label><input id="taskTitle" required></div><div class="full"><label>Описание</label><textarea id="taskDescription"></textarea></div><button class="btn green full">Назначить</button></form>':'<div class="empty">Сначала добавьте сотрудников</div>')+"</section>";
-    $("dash").insertAdjacentHTML("afterbegin",'<section class="panel"><h3>Уведомления</h3><div class="list">'+notificationRows+'</div></section>');
+    $("dash").insertAdjacentHTML("beforeend",'<section class="panel"><h3>Добавить сотрудника</h3><form id="createStaffForm" class="grid"><div class="full"><label>Имя и фамилия</label><input id="newStaffName" required></div><div><label>Должность</label><select id="newStaffRole"><option value="teacher">Учитель</option><option value="educator">Воспитатель</option><option value="admin">Администратор</option><option value="cleaner">Уборщик</option></select></div><div><label>Логин латиницей</label><input id="newStaffLogin" placeholder="ibrahim" pattern="[A-Za-z0-9._-]+" required></div><div class="full"><label>Начальный пароль</label><input id="newStaffPassword" type="password" minlength="6" required></div><button class="btn green full">Создать сотрудника</button></form></section>');
+    $("dash").insertAdjacentHTML("beforeend",'<section class="panel"><h3>Уведомления</h3><div class="list">'+notificationRows+'</div></section>');
     $("dash").insertAdjacentHTML("beforeend",'<section class="panel"><h3>Записи воспитателя</h3><div class="list">'+educatorRows+'</div></section>');
     if(assignees)$("taskForm").onsubmit=saveTask;
+    $("createStaffForm").onsubmit=createStaff;
     if(studentOptions)$("assessmentForm").onsubmit=saveAssessment;
     if(teachers.length&&groups.length)$("assignmentForm").onsubmit=saveAssignment;
     document.querySelectorAll("[data-deputy-scope]").forEach(function(b){b.onclick=async function(){b.disabled=true;var cur=b.dataset.current,want=b.dataset.deputyScope,next;if(cur==='both')next=want==='religious'?'secular':'religious';else if(cur===want)next='none';else if(cur==='none'||!cur)next=want;else next='both';try{await api("/rest/v1/profiles?id=eq."+b.dataset.id,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({deputy_scope:next,is_deputy:next!=='none'})});await renderDirector()}catch(err){alert(err.message);b.disabled=false}}});
     document.querySelectorAll("[data-approve]").forEach(function(b){b.onclick=async function(){var id=b.dataset.approve,sel=document.querySelector('[data-role="'+id+'"]');b.disabled=true;try{await api("/rest/v1/rpc/approve_staff",{method:"POST",body:JSON.stringify({p_user:id,p_role:sel.value,p_name:b.closest(".item").querySelector("strong").textContent})});await renderDirector()}catch(err){alert(err.message);b.disabled=false}}});
     await addSchedulePanel(false,false);
+  }
+  async function createStaff(e){
+    e.preventDefault();var name=$("newStaffName").value.trim(),loginName=$("newStaffLogin").value.trim().toLowerCase(),password=$("newStaffPassword").value,role=$("newStaffRole").value,email=loginName+"@akyl-center.app",button=e.target.querySelector("button");button.disabled=true;button.textContent="Создание…";
+    try{
+      var res=await fetch(URL+"/auth/v1/signup",{method:"POST",headers:{apikey:KEY,"Content-Type":"application/json"},body:JSON.stringify({email:email,password:password,data:{full_name:name}})}),data=await res.json();
+      if(!res.ok||!data.user)throw new Error(data.msg||data.message||"Не удалось создать сотрудника");
+      await api("/rest/v1/rpc/approve_staff",{method:"POST",body:JSON.stringify({p_user:data.user.id,p_role:role,p_name:name})});
+      await api("/rest/v1/profiles?id=eq."+data.user.id,{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({login_name:loginName})});
+      alert("Сотрудник создан. Логин: "+loginName);await renderDirector();
+    }catch(err){alert(err.message);button.disabled=false;button.textContent="Создать сотрудника"}
   }
   async function saveAssessment(e){e.preventDefault();var h=Number($("hifzErrors").value||0),t=Number($("tajwidErrors").value||0),score=Math.max(0,100-h*3-t*1.5);try{await api("/rest/v1/juz_assessments",{method:"POST",headers:{"Prefer":"return=minimal"},body:JSON.stringify({student_id:$("assessmentStudent").value,juz_number:Number($("assessmentJuz").value),examiner_id:user.id,hifz_errors:h,tajwid_errors:t,score:score,decision:$("assessmentDecision").value})});alert("Итог: "+score+" баллов");await renderDirector()}catch(err){alert(err.message)}}
   async function renderDeputy(){
@@ -236,7 +239,9 @@
   function attendance(x){return {present:"на занятии",absent:"пропуск",ill:"болезнь"}[x]||x}
   function lessonStatus(x,a){return {passed:"сдал",unprepared:"не подготовил",absent:"отсутствует",ill:"болен"}[x]||attendance(a)}
   function makeSectionsMenu(){
-    var dash=$("dash"),panels=Array.from(dash.querySelectorAll(":scope > .panel"));
+    var dash=$("dash"),stats=dash.querySelector(":scope > .stats");
+    if(stats){var summary=document.createElement("section"),summaryTitle=document.createElement("h3");summary.className="panel";summaryTitle.textContent="Краткий итог";stats.parentNode.insertBefore(summary,stats);summary.appendChild(summaryTitle);summary.appendChild(stats)}
+    var panels=Array.from(dash.querySelectorAll(":scope > .panel"));
     if(!panels.length)return;
     var hint=document.createElement("div");hint.className="section-hint";hint.textContent="Выберите нужный раздел";
     var anchor=dash.querySelector(":scope > .hero, :scope > .stats");
@@ -255,5 +260,5 @@
   document.addEventListener("touchstart",function(e){if(window.scrollY===0&&profile){pullStart=e.touches[0].clientY;pullReady=false}}, {passive:true});
   document.addEventListener("touchmove",function(e){if(!pullStart)return;var distance=e.touches[0].clientY-pullStart;if(distance>85){pullReady=true;var d=$("pullRefresh");if(!d){d=document.createElement("div");d.id="pullRefresh";d.className="empty";d.style.cssText="position:fixed;top:8px;left:25%;width:50%;z-index:20;background:#fff;border-radius:20px;box-shadow:0 4px 18px #0002";document.body.appendChild(d)}d.textContent="Отпустите, чтобы обновить"}}, {passive:true});
   document.addEventListener("touchend",async function(){var d=$("pullRefresh");if(d)d.remove();var ready=pullReady;pullStart=0;pullReady=false;if(ready&&profile){$("dash").innerHTML='<div class="empty">Обновление…</div>';try{await render()}catch(err){alert(err.message)}}}, {passive:true});
-  try{var saved=JSON.parse(localStorage.getItem("akyl_auth")||"null");if(saved&&saved.user){token=saved.token||"";refreshToken=saved.refreshToken||"";user=saved.user;loadProfile().catch(async function(){try{await refreshSession();await loadProfile()}catch(err){localStorage.removeItem("akyl_auth");showLogin("Войдите снова.")}})}}catch(e){}
+  try{var saved=JSON.parse(localStorage.getItem("akyl_auth")||"null");if(saved&&saved.user){token=saved.token||"";refreshToken=saved.refreshToken||"";user=saved.user;loadProfile().catch(async function(){try{await refreshSession();await loadProfile()}catch(err){localStorage.removeItem("akyl_auth");showLogin("Войдите снова.");await loadLoginDirectory()}})}else loadLoginDirectory()}catch(e){loadLoginDirectory()}
 })();
