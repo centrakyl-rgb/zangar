@@ -43,10 +43,14 @@
   }
   $("loginForm").onsubmit=async function(e){
     e.preventDefault();$("error").textContent="Подключение…";
-    try{var email=$("loginPerson").value;if(!email)throw new Error("Выберите сотрудника");await login(email,$("password").value)}
-    catch(err){showLogin(err.message)}
+    var email=$("loginPerson").value;if(!email){$("error").textContent="Выберите сотрудника";return}
+    var passKey="akyl_saved_password_"+email,savedPassword=localStorage.getItem(passKey)||"",password=$("password").value||savedPassword;
+    if(!password){$("passwordOnce").classList.remove("hidden");$("error").textContent="Для первого входа введите пароль один раз";$("password").focus();return}
+    try{await login(email,password);localStorage.setItem(passKey,password);$("passwordOnce").classList.add("hidden");$("password").value=""}
+    catch(err){localStorage.removeItem(passKey);$("passwordOnce").classList.remove("hidden");$("error").textContent="Введите пароль один раз для этого сотрудника"}
   };
-  $("loginRole").onchange=renderLoginPeople;
+  $("loginRole").onchange=function(){renderLoginPeople();$("passwordOnce").classList.add("hidden");$("password").value="";$("error").textContent=""};
+  $("loginPerson").onchange=function(){$("passwordOnce").classList.add("hidden");$("password").value="";$("error").textContent=""};
   $("logout").onclick=async function(){
     try{await api("/auth/v1/logout",{method:"POST"})}catch(e){}
     localStorage.removeItem("akyl_auth");token="";refreshToken="";user=null;profile=null;$("password").value="";showLogin();await loadLoginDirectory();
