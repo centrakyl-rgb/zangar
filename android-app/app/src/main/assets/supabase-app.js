@@ -65,8 +65,14 @@
     else await renderAdmin();
     if(["director","deputy","teacher","educator"].indexOf(profile.role)>=0)await addStudentDossier();
     addPasswordSection();
+    $("dash").querySelectorAll(":scope > .hero").forEach(function(x){x.remove()});
     makeSectionsMenu();
+    setupHelp();
     await renderHeaderNotifications();
+  }
+  function setupHelp(){
+    var texts={director:"Расписание — просмотр занятий.\nПоставить задачу — поручения сотрудникам.\nКонтрольная сдача джуза — итоговая проверка на 100 баллов.\nДосье ученика — полная история обучения и сдач.",deputy:"Создавайте группы и добавляйте учеников. Проверяйте журналы, расписание и досье каждого ученика.",teacher:"Открывайте свой журнал, отмечайте сдачу урока и причину несдачи. В досье можно посмотреть историю ученика по доступным предметам.",educator:"Добавляйте воспитательные записи и контролируйте дежурства учеников.",admin:"Открывайте назначенные директором задачи и отмечайте их выполнение.",cleaner:"В конце рабочего дня подтвердите уборку или коротко укажите проблему."};
+    $("helpText").textContent=texts[profile.role]||"Выберите нужный раздел на главном экране.";$("helpButton").onclick=function(e){e.stopPropagation();$("notificationPopover").classList.add("hidden");$("helpPopover").classList.toggle("hidden")};
   }
   async function safeApi(path){try{return await api(path)}catch(e){return []}}
   async function addStudentDossier(){
@@ -104,9 +110,9 @@
     var key="akyl_read_notifications_"+user.id,read=JSON.parse(localStorage.getItem(key)||"[]"),unread=rows.filter(function(n){return read.indexOf(n.id)<0});
     $("notificationCount").textContent=unread.length>99?"99+":String(unread.length);$("notificationCount").classList.toggle("hidden",!unread.length);
     $("notificationList").innerHTML=rows.map(function(n){return '<div class="item"><strong>'+esc(n.title)+'</strong><p>'+esc(n.message)+' · '+new Date(n.created_at).toLocaleString('ru-RU')+'</p></div>'}).join("")||'<div class="empty">Новых уведомлений нет</div>';
-    $("notificationBell").onclick=function(e){e.stopPropagation();var pop=$("notificationPopover"),opening=pop.classList.contains("hidden");pop.classList.toggle("hidden");if(opening){localStorage.setItem(key,JSON.stringify(rows.map(function(n){return n.id})));$("notificationCount").classList.add("hidden")}};
+    $("notificationBell").onclick=function(e){e.stopPropagation();$("helpPopover").classList.add("hidden");var pop=$("notificationPopover"),opening=pop.classList.contains("hidden");pop.classList.toggle("hidden");if(opening){localStorage.setItem(key,JSON.stringify(rows.map(function(n){return n.id})));$("notificationCount").classList.add("hidden")}};
   }
-  document.addEventListener("click",function(e){var p=$("notificationPopover");if(p&&!p.classList.contains("hidden")&&!e.target.closest(".bell-wrap"))p.classList.add("hidden")});
+  document.addEventListener("click",function(e){if(e.target.closest(".bell-wrap"))return;["notificationPopover","helpPopover"].forEach(function(id){var p=$(id);if(p)p.classList.add("hidden")})});
   async function renderTeacher(){
     assignments=await api("/rest/v1/teacher_assignments?teacher_id=eq."+user.id+"&select=subject_id,subjects(id,name),groups(id,name,students(id,full_name,active))");
     var delegated=await api("/rest/v1/teacher_delegations?substitute_teacher_id=eq."+user.id+"&active=eq.true&select=subject_id,subjects(id,name),groups(id,name,students(id,full_name,active)),end_date");
