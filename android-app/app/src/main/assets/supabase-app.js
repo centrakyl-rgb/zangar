@@ -68,6 +68,7 @@
     else if(profile.role==="educator")await renderEducator();
     else if(profile.role==="cleaner")await renderCleaner();
     else await renderAdmin();
+    makeSectionsMenu();
   }
   async function renderTeacher(){
     assignments=await api("/rest/v1/teacher_assignments?teacher_id=eq."+user.id+"&select=subject_id,subjects(id,name),groups(id,name,students(id,full_name,active))");
@@ -234,6 +235,22 @@
   function staffLabel(p,a){if(p.role!=="teacher")return roleName(p.role);var own=a.filter(function(x){return x.teacher_id===p.id});if(!own.length)return "учитель · предмет не назначен";return own.map(function(x){return "учитель "+(x.subjects&&x.subjects.name)+" · "+(x.groups&&x.groups.name)}).join(", ")}
   function attendance(x){return {present:"на занятии",absent:"пропуск",ill:"болезнь"}[x]||x}
   function lessonStatus(x,a){return {passed:"сдал",unprepared:"не подготовил",absent:"отсутствует",ill:"болен"}[x]||attendance(a)}
+  function makeSectionsMenu(){
+    var dash=$("dash"),panels=Array.from(dash.querySelectorAll(":scope > .panel"));
+    if(!panels.length)return;
+    var hint=document.createElement("div");hint.className="section-hint";hint.textContent="Выберите нужный раздел";
+    var anchor=dash.querySelector(":scope > .hero, :scope > .stats");
+    if(anchor)anchor.insertAdjacentElement("afterend",hint);else dash.insertBefore(hint,dash.firstChild);
+    panels.forEach(function(panel,index){
+      if(panel.classList.contains("section-card"))return;
+      var heading=panel.querySelector(":scope > h3"),title=heading?heading.textContent.trim():"Раздел "+(index+1);
+      var body=document.createElement("div");body.className="section-body";
+      Array.from(panel.childNodes).forEach(function(node){if(node!==heading)body.appendChild(node)});
+      var button=document.createElement("button");button.type="button";button.className="section-toggle";button.setAttribute("aria-expanded","false");button.innerHTML='<span>'+esc(title)+'</span><span class="section-arrow">⌄</span>';
+      if(heading)heading.remove();panel.appendChild(button);panel.appendChild(body);panel.classList.add("section-card","closed");
+      button.onclick=function(){var closed=panel.classList.toggle("closed");button.setAttribute("aria-expanded",String(!closed));button.querySelector(".section-arrow").textContent=closed?"⌄":"⌃";if(!closed)setTimeout(function(){panel.scrollIntoView({behavior:"smooth",block:"start"})},50)};
+    });
+  }
   var pullStart=0,pullReady=false;
   document.addEventListener("touchstart",function(e){if(window.scrollY===0&&profile){pullStart=e.touches[0].clientY;pullReady=false}}, {passive:true});
   document.addEventListener("touchmove",function(e){if(!pullStart)return;var distance=e.touches[0].clientY-pullStart;if(distance>85){pullReady=true;var d=$("pullRefresh");if(!d){d=document.createElement("div");d.id="pullRefresh";d.className="empty";d.style.cssText="position:fixed;top:8px;left:25%;width:50%;z-index:20;background:#fff;border-radius:20px;box-shadow:0 4px 18px #0002";document.body.appendChild(d)}d.textContent="Отпустите, чтобы обновить"}}, {passive:true});
