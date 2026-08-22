@@ -63,8 +63,20 @@
     else if(profile.role==="educator")await renderEducator();
     else if(profile.role==="cleaner")await renderCleaner();
     else await renderAdmin();
+    addPasswordSection();
     makeSectionsMenu();
     await renderHeaderNotifications();
+  }
+  function addPasswordSection(){
+    var section=document.createElement("section");section.className="panel";section.innerHTML='<h3>Безопасность</h3><form id="changePasswordForm"><label>Новый пароль</label><input id="newOwnPassword" type="password" minlength="6" required placeholder="Не менее 6 знаков"><label>Повторите новый пароль</label><input id="repeatOwnPassword" type="password" minlength="6" required><button class="btn green" style="width:100%;margin-top:12px">Сменить пароль</button></form>';
+    $("dash").appendChild(section);$("changePasswordForm").onsubmit=changeOwnPassword;
+  }
+  async function changeOwnPassword(e){
+    e.preventDefault();var first=$("newOwnPassword").value,second=$("repeatOwnPassword").value,button=e.target.querySelector("button");
+    if(first!==second){alert("Пароли не совпадают");return}if(first.length<6){alert("Пароль должен содержать не менее 6 знаков");return}
+    button.disabled=true;button.textContent="Сохранение…";
+    try{await api("/auth/v1/user",{method:"PUT",body:JSON.stringify({password:first})});if(user&&user.email)localStorage.setItem("akyl_saved_password_"+user.email,first);alert("Пароль изменён");e.target.reset()}
+    catch(err){alert(err.message)}finally{button.disabled=false;button.textContent="Сменить пароль"}
   }
   async function renderHeaderNotifications(){
     var rows=[];try{rows=await api("/rest/v1/notifications?recipient_id=eq."+user.id+"&select=id,title,message,created_at&order=created_at.desc&limit=30")}catch(e){}
