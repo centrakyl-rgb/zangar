@@ -63,9 +63,30 @@
     else if(profile.role==="educator")await renderEducator();
     else if(profile.role==="cleaner")await renderCleaner();
     else await renderAdmin();
+    if(["director","deputy","teacher","educator"].indexOf(profile.role)>=0)await addStudentDossier();
     addPasswordSection();
     makeSectionsMenu();
     await renderHeaderNotifications();
+  }
+  async function safeApi(path){try{return await api(path)}catch(e){return []}}
+  async function addStudentDossier(){
+    var students=await safeApi("/rest/v1/students?active=eq.true&select=id,full_name,groups(name)&order=full_name.asc");if(!students.length)return;
+    var section=document.createElement("section");section.className="panel";section.innerHTML='<h3>Досье ученика</h3><label>Ученик</label><select id="dossierStudent">'+students.map(function(s){return '<option value="'+s.id+'">'+esc(s.full_name)+(s.groups&&s.groups.name?' · '+esc(s.groups.name):'')+'</option>'}).join('')+'</select><div id="dossierBody" style="margin-top:12px"><div class="empty">Загрузка истории…</div></div>';
+    $("dash").appendChild(section);$("dossierStudent").onchange=loadStudentDossier;await loadStudentDossier();
+  }
+  async function loadStudentDossier(){
+    var id=$("dossierStudent").value,body=$("dossierBody");if(!id||!body)return;body.innerHTML='<div class="empty">Загрузка истории…</div>';
+    var data=await Promise.all([
+      safeApi("/rest/v1/journal_entries?student_id=eq."+id+"&select=lesson_date,grade,attendance,lesson_status,plan_text,completed_text,teacher_decision,comment,subjects(name),profiles!journal_entries_teacher_id_fkey(full_name)&order=lesson_date.desc&limit=300"),
+      safeApi("/rest/v1/juz_assessments?student_id=eq."+id+"&select=assessment_date,juz_number,hifz_errors,tajwid_errors,score,decision&order=assessment_date.desc&limit=100"),
+      safeApi("/rest/v1/educator_notes?student_id=eq."+id+"&select=note_date,category,note,profiles!educator_notes_educator_id_fkey(full_name)&order=note_date.desc&limit=100"),
+      safeApi("/rest/v1/duty_assignments?student_id=eq."+id+"&select=duty_date,duty_type,status,rating&order=duty_date.desc&limit=100")
+    ]),entries=data[0],assessments=data[1],notes=data[2],duties=data[3],passed=entries.filter(function(x){return x.lesson_status==='passed'}).length,absent=entries.filter(function(x){return x.attendance==='absent'}).length,ill=entries.filter(function(x){return x.attendance==='ill'}).length,latest=entries[0];
+    var exams=assessments.map(function(a){return '<div class="item"><div class="row"><strong>'+a.juz_number+' джуз · '+esc(a.assessment_date)+'</strong><span class="badge">'+a.score+' баллов</span></div><p>Хифз: '+a.hifz_errors+' · таджвид: '+a.tajwid_errors+' · '+esc(a.decision||'')+'</p></div>'}).join('')||'<div class="empty">Сдач джузов пока нет</div>';
+    var lessons=entries.slice(0,30).map(function(x){return '<div class="item"><div class="row"><strong>'+esc(x.subjects&&x.subjects.name)+' · '+esc(x.lesson_date)+'</strong><span class="badge">'+lessonStatus(x.lesson_status,x.attendance)+'</span></div><p>План: '+esc(x.plan_text||'—')+' · выполнено: '+esc(x.completed_text||'—')+(x.teacher_decision?' · '+esc(x.teacher_decision):'')+'</p></div>'}).join('')||'<div class="empty">Уроков пока нет</div>';
+    var noteRows=notes.map(function(n){return '<div class="item"><strong>'+esc(n.category)+' · '+esc(n.note_date)+'</strong><p>'+esc(n.note)+(n.profiles?' · '+esc(n.profiles.full_name):'')+'</p></div>'}).join('')||'<div class="empty">Записей воспитателя нет</div>';
+    var dutyRows=duties.slice(0,20).map(function(d){return '<div class="item"><strong>'+(d.duty_type==='class'?'Дежурство в классе':'Дежурство в столовой')+' · '+esc(d.duty_date)+'</strong><p>'+esc(d.status)+(d.rating?' · оценка: '+esc(d.rating):'')+'</p></div>'}).join('')||'<div class="empty">Дежурств пока нет</div>';
+    body.innerHTML='<div class="stats"><div class="stat"><strong>'+entries.length+'</strong><span>уроков</span></div><div class="stat"><strong>'+passed+'</strong><span>сдано</span></div><div class="stat"><strong>'+absent+'</strong><span>пропусков</span></div><div class="stat"><strong>'+ill+'</strong><span>болезней</span></div></div>'+(latest?'<div class="item" style="margin-top:12px"><strong>Текущий план</strong><p>'+esc(latest.subjects&&latest.subjects.name)+' · '+esc(latest.plan_text||latest.completed_text||'План ещё не указан')+'</p></div>':'')+'<h3 style="margin-top:16px">Сдача джузов / Рашида</h3><div class="list">'+exams+'</div><h3 style="margin-top:16px">История уроков</h3><div class="list">'+lessons+'</div><h3 style="margin-top:16px">Воспитательная работа</h3><div class="list">'+noteRows+'</div><h3 style="margin-top:16px">Дежурства</h3><div class="list">'+dutyRows+'</div>';
   }
   function addPasswordSection(){
     var section=document.createElement("section");section.className="panel";section.innerHTML='<h3>Безопасность</h3><form id="changePasswordForm"><label>Новый пароль</label><input id="newOwnPassword" type="password" minlength="6" required placeholder="Не менее 6 знаков"><label>Повторите новый пароль</label><input id="repeatOwnPassword" type="password" minlength="6" required><button class="btn green" style="width:100%;margin-top:12px">Сменить пароль</button></form>';
