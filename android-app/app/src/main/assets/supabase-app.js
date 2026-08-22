@@ -30,7 +30,7 @@
     token=data.access_token;refreshToken=data.refresh_token||refreshToken;user=data.user||user;saveAuth();
   }
   async function loadLoginDirectory(){try{loginDirectory=await api("/rest/v1/rpc/login_directory",{method:"POST",body:"{}"});renderLoginPeople()}catch(e){$("loginPerson").innerHTML='<option value="">Сначала выполните обновление базы</option>'}}
-  function renderLoginPeople(){var role=$("loginRole").value,people=loginDirectory.filter(function(p){return p.role===role});$("loginPerson").innerHTML=people.map(function(p){return '<option value="'+esc(p.login_email)+'">'+esc(p.full_name)+'</option>'}).join('')||'<option value="">Сотрудники не добавлены</option>'}
+  function renderLoginPeople(){var role=$("loginRole").value,people=loginDirectory.filter(function(p){return p.role===role});$("loginPerson").innerHTML=people.map(function(p){return '<option value="'+esc(p.login_email)+'">'+esc(p.full_name)+'</option>'}).join('')||'<option value="">Сотрудники не добавлены</option>';$("personField").classList.toggle("hidden",people.length===1)}
   async function loadProfile(){
     var rows=await api("/rest/v1/profiles?id=eq."+encodeURIComponent(user.id)+"&select=id,full_name,role,active,is_deputy,deputy_scope");
     if(!rows.length)throw new Error("Для этого пользователя ещё не назначена роль");
