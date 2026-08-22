@@ -246,6 +246,8 @@
     var hint=document.createElement("div");hint.className="section-hint";hint.textContent="Выберите нужный раздел";
     var anchor=dash.querySelector(":scope > .hero, :scope > .stats");
     if(anchor)anchor.insertAdjacentElement("afterend",hint);else dash.insertBefore(hint,dash.firstChild);
+    var priority={"Расписание":1,"Уведомления":2,"Поставить задачу":3,"Контрольная сдача джуза":4,"Краткий итог":5,"Итог сегодняшнего дня":6,"Сравнение учеников":7,"Предметы учителей":8,"Заместитель по учебной части":9,"Добавить сотрудника":10,"Новые сотрудники":11,"Записи воспитателя":12};
+    panels.sort(function(a,b){var ah=a.querySelector(":scope > h3"),bh=b.querySelector(":scope > h3"),ap=priority[ah&&ah.textContent.trim()]||50,bp=priority[bh&&bh.textContent.trim()]||50;return ap-bp}).forEach(function(panel){dash.appendChild(panel)});
     panels.forEach(function(panel,index){
       if(panel.classList.contains("section-card"))return;
       var heading=panel.querySelector(":scope > h3"),title=heading?heading.textContent.trim():"Раздел "+(index+1);
