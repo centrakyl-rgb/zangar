@@ -15,6 +15,7 @@
     return data;
   }
   function showLogin(message){
+    var nav=document.querySelector(".dashboard-nav");if(nav)nav.remove();
     $("app").classList.add("hidden");$("login").classList.remove("hidden");
     if(message)$("error").textContent=message;
   }
@@ -56,6 +57,7 @@
     localStorage.removeItem("akyl_auth");token="";refreshToken="";user=null;profile=null;$("password").value="";showLogin();await loadLoginDirectory();
   };
   async function render(){
+    var oldNav=document.querySelector(".dashboard-nav");if(oldNav)oldNav.remove();
     $("dash").innerHTML='<div class="empty">Загрузка журнала…</div>';
     if(profile.role==="teacher")await renderTeacher();
     else if(profile.role==="director")await renderDirector();
@@ -306,6 +308,19 @@
       if(heading)heading.remove();panel.appendChild(button);panel.appendChild(body);panel.classList.add("section-card","closed");
       button.onclick=function(){var closed=panel.classList.toggle("closed");button.setAttribute("aria-expanded",String(!closed));button.querySelector(".section-arrow").textContent=closed?"⌄":"⌃";if(!closed)setTimeout(function(){panel.scrollIntoView({behavior:"smooth",block:"start"})},50)};
     });
+    setupDashboardNavigation(panels,hint);
+  }
+  function setupDashboardNavigation(panels,hint){
+    function category(title){
+      if(/Досье|воспитател|Дежур|ученик/i.test(title)&&!/Сравнение/i.test(title))return "students";
+      if(/журнал|запис|сдач|успеваем|Сравнение|Итог сегодняшнего дня|Новая запись/i.test(title))return "journal";
+      if(/Безопасность|сотрудник|Заместитель|Предметы учителей|Добавить|Новые сотрудники/i.test(title))return "more";
+      return "home";
+    }
+    panels.forEach(function(panel){var b=panel.querySelector(".section-toggle"),title=b?b.textContent.trim():"";panel.dataset.navCategory=category(title)});
+    var nav=document.createElement("nav");nav.className="dashboard-nav";nav.innerHTML='<button class="nav-button active" data-nav="home"><span>⌂</span>Главная</button><button class="nav-button" data-nav="journal"><span>▤</span>Журнал</button><button class="nav-button" data-nav="students"><span>♙</span>Ученики</button><button class="nav-button" data-nav="more"><span>•••</span>Ещё</button>';document.body.appendChild(nav);
+    function show(name){panels.forEach(function(panel){panel.classList.toggle("nav-hidden",panel.dataset.navCategory!==name)});nav.querySelectorAll(".nav-button").forEach(function(b){b.classList.toggle("active",b.dataset.nav===name)});hint.textContent={home:"Главная",journal:"Журнал и успеваемость",students:"Ученики",more:"Управление"}[name];window.scrollTo({top:0,behavior:"smooth"})}
+    nav.querySelectorAll(".nav-button").forEach(function(b){b.onclick=function(){show(b.dataset.nav)}});show("home");
   }
   var pullStart=0,pullReady=false;
   document.addEventListener("touchstart",function(e){if(window.scrollY===0&&profile){pullStart=e.touches[0].clientY;pullReady=false}}, {passive:true});
