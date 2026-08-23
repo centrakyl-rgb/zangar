@@ -2,7 +2,7 @@
   "use strict";
   var URL="https://ihevokoybbchdsujcpls.supabase.co";
   var KEY="sb_publishable_36ExgycbIBA2Hd7ZmSEu_A_65KsGs-X";
-  var token="",refreshToken="",user=null,profile=null,assignments=[],loginDirectory=[],projectRefreshStarted=false;
+  var token="",refreshToken="",user=null,profile=null,assignments=[],loginDirectory=[],projectRefreshStarted=false,activeNav="home";
   var $=function(id){return document.getElementById(id)};
   var esc=function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})};
   async function api(path,options){
@@ -332,8 +332,8 @@
     }
     panels.forEach(function(panel){var b=panel.querySelector(".section-toggle"),title=b?b.textContent.trim():"";panel.dataset.navCategory=category(title)});
     var nav=document.createElement("nav");nav.className="dashboard-nav";nav.innerHTML='<button class="nav-button active" data-nav="home"><span>⌂</span>Главная</button><button class="nav-button" data-nav="journal"><span>▤</span>Журнал</button><button class="nav-button" data-nav="students"><span>♙</span>Ученики</button><button class="nav-button" data-nav="projects"><span>◆</span>Проекты</button><button class="nav-button" data-nav="more"><span>•••</span>Ещё</button>';document.body.appendChild(nav);
-    function show(name){panels.forEach(function(panel){panel.classList.toggle("nav-hidden",panel.dataset.navCategory!==name)});nav.querySelectorAll(".nav-button").forEach(function(b){b.classList.toggle("active",b.dataset.nav===name)});hint.textContent={home:"Главная",journal:"Журнал и успеваемость",students:"Ученики",projects:"Проекты центра",more:"Управление"}[name];window.scrollTo({top:0,behavior:"smooth"})}
-    nav.querySelectorAll(".nav-button").forEach(function(b){b.onclick=function(){show(b.dataset.nav)}});show("home");
+    function show(name){activeNav=name;panels.forEach(function(panel){panel.classList.toggle("nav-hidden",panel.dataset.navCategory!==name)});nav.querySelectorAll(".nav-button").forEach(function(b){b.classList.toggle("active",b.dataset.nav===name)});hint.textContent={home:"Главная",journal:"Журнал и успеваемость",students:"Ученики",projects:"Проекты центра",more:"Управление"}[name];window.scrollTo({top:0,behavior:"smooth"})}
+    nav.querySelectorAll(".nav-button").forEach(function(b){b.onclick=function(){show(b.dataset.nav)}});show(activeNav||"home");
   }
   var pullStart=0,pullReady=false;
   document.addEventListener("touchstart",function(e){if(window.scrollY===0&&profile){pullStart=e.touches[0].clientY;pullReady=false}}, {passive:true});
