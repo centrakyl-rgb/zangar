@@ -69,7 +69,7 @@ public class MainActivity extends Activity {
             try{double amount=Double.parseDouble(clean);String c=context==null?"":context.toLowerCase();if(c.contains("млн"))amount*=1000000;else if(c.contains("тыс"))amount*=1000;return String.valueOf((long)amount);}catch(Exception ignored){return clean;}
         }
         private String findAmount(String text,String source,String label,String jsonKey){
-            String number="([0-9][0-9\\s\\u00a0.,]{0,20})";Matcher m=Pattern.compile("(?isu)"+label+".{0,5000}?"+number+"\\s*(?:млн|миллион(?:ов|а)?|тыс(?:яч)?|₽|руб(?:лей|ля|\\.))").matcher(text);String found="";while(m.find())found=cleanAmount(m.group(1),m.group());if(!found.isEmpty())return found;
+            String number="([0-9][0-9\\s\\u00a0.,]{0,20})";Matcher m=Pattern.compile("(?isu)"+label+".{0,5000}?"+number+"\\s*(?:млн|миллион(?:ов|а)?|тыс(?:яч)?|₽|руб(?:лей|ля|\\.))").matcher(text);if(m.find())return cleanAmount(m.group(1),m.group());
             m=Pattern.compile("(?iu)"+number+"\\s*(?:млн|миллион(?:ов|а)?|тыс(?:яч)?|₽|руб(?:лей|ля|\\.))[^0-9]{0,100}"+label).matcher(text);if(m.find())return cleanAmount(m.group(1),m.group());
             m=Pattern.compile("(?iu)[\\\"']?"+jsonKey+"[\\\"']?\\s*[:=]\\s*[\\\"']?"+number).matcher(source);return m.find()?cleanAmount(m.group(1),m.group()):"";
         }
