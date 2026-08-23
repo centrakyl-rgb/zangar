@@ -2,6 +2,8 @@ package center.akyl.app;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.view.View;
+import android.view.WindowInsets;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -25,6 +27,12 @@ public class MainActivity extends Activity {
 
         webView = new WebView(this);
         webView.setWebViewClient(new WebViewClient());
+        webView.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+            @Override public WindowInsets onApplyWindowInsets(View view, WindowInsets insets) {
+                view.setPadding(0, insets.getSystemWindowInsetTop(), 0, insets.getSystemWindowInsetBottom());
+                return insets;
+            }
+        });
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
