@@ -64,14 +64,17 @@ public class MainActivity extends Activity {
                 final String payload=result;webView.post(() -> webView.evaluateJavascript("window.receiveProjectData(" + JSONObject.quote(payload) + ")", null));
             }).start();
         }
-        private String cleanAmount(String value){return value==null?"":value.replaceAll("[\\s\\u00a0]", "").replace(',', '.');}
+        private String cleanAmount(String value,String context){
+            if(value==null)return "";String clean=value.replaceAll("[\\s\\u00a0]", "").replace(',', '.');
+            try{double amount=Double.parseDouble(clean);String c=context==null?"":context.toLowerCase();if(c.contains("млн"))amount*=1000000;else if(c.contains("тыс"))amount*=1000;return String.valueOf((long)amount)}catch(Exception ignored){return clean;}
+        }
         private String findAmount(String text,String source,String label,String jsonKey){
-            String number="([0-9][0-9\\s\\u00a0.,]{0,20})";Matcher m=Pattern.compile("(?iu)"+label+"[^0-9]{0,160}"+number).matcher(text);if(m.find())return cleanAmount(m.group(1));
-            m=Pattern.compile("(?iu)"+number+"\\s*(?:₽|руб(?:лей|ля|\\.)?)?[^0-9]{0,100}"+label).matcher(text);if(m.find())return cleanAmount(m.group(1));
-            m=Pattern.compile("(?iu)[\\\"']?"+jsonKey+"[\\\"']?\\s*[:=]\\s*[\\\"']?"+number).matcher(source);return m.find()?cleanAmount(m.group(1)):"";
+            String number="([0-9][0-9\\s\\u00a0.,]{0,20})";Matcher m=Pattern.compile("(?iu)"+label+"[^0-9]{0,160}"+number+"\\s*(?:млн|миллион(?:ов|а)?|тыс(?:яч)?)?").matcher(text);if(m.find())return cleanAmount(m.group(1),m.group());
+            m=Pattern.compile("(?iu)"+number+"\\s*(?:млн|миллион(?:ов|а)?|тыс(?:яч)?)?\\s*(?:₽|руб(?:лей|ля|\\.)?)?[^0-9]{0,100}"+label).matcher(text);if(m.find())return cleanAmount(m.group(1),m.group());
+            m=Pattern.compile("(?iu)[\\\"']?"+jsonKey+"[\\\"']?\\s*[:=]\\s*[\\\"']?"+number).matcher(source);return m.find()?cleanAmount(m.group(1),m.group()):"";
         }
         private String findGoal(String text,String source){
-            String number="([0-9][0-9\\s\\u00a0.,]{0,20})";Matcher m=Pattern.compile("(?iu)(?:собрано|собрали)[^0-9]{0,100}"+number+"[^0-9]{0,60}(?:из|цель)[^0-9]{0,60}"+number).matcher(text);if(m.find())return cleanAmount(m.group(2));
+            String number="([0-9][0-9\\s\\u00a0.,]{0,20})";Matcher m=Pattern.compile("(?iu)(?:собрано|собрали)[^0-9]{0,100}"+number+"\\s*(?:млн|миллион(?:ов|а)?|тыс(?:яч)?)?[^0-9]{0,60}(?:из|цель)[^0-9]{0,60}"+number+"\\s*(?:млн|миллион(?:ов|а)?|тыс(?:яч)?)?").matcher(text);if(m.find())return cleanAmount(m.group(2),m.group());
             return findAmount(text,source,"(?:цель|необходимо|требуется|нужно собрать)","(?:goal|target|targetAmount|target_amount)");
         }
         private String findLink(String html,String expression){Matcher m=Pattern.compile(expression,Pattern.CASE_INSENSITIVE).matcher(html);return m.find()?m.group().replace("&amp;", "&"):"";}
