@@ -57,9 +57,9 @@ public class MainActivity extends Activity {
                     String source = html.toString(), text = source.replaceAll("(?is)<script.*?</script>|<style.*?</style>", " ").replaceAll("(?s)<[^>]+>", " ").replace("&nbsp;", " ").replace("&#8381;", "₽");
                     String collected = findCollected(text, source), goal = findGoal(text, source);
                     if (collected.equals(goal) || collected.isEmpty()) collected = "44760";
-                    String telegram = findLink(source, "https?://(?:t\\.me|telegram\\.me)/[^\\\"'<> ]+");
-                    String vk = findLink(source, "https?://(?:www\\.)?vk\\.(?:com|ru)/[^\\\"'<> ]+");
-                    String max = findLink(source, "https?://(?:max\\.ru|web\\.max\\.ru)/[^\\\"'<> ]+");
+                    String telegram = "https://t.me/zangar_masjid";
+                    String vk = "https://vk.ru/mechet_zangar";
+                    String max = "https://max.ru/join/hZ_if71_D-7cTA1pHZ6_-pgPJuiJIJgaaVvSl-anxSM";
                     result = "{\"site\":\"https://mechet-zangar.ru/\",\"collected\":" + JSONObject.quote(collected) + ",\"goal\":" + JSONObject.quote(goal) + ",\"telegram\":" + JSONObject.quote(telegram) + ",\"vk\":" + JSONObject.quote(vk) + ",\"max\":" + JSONObject.quote(max) + "}";
                 } catch (Exception ignored) {}
                 final String payload=result;webView.post(() -> webView.evaluateJavascript("window.receiveProjectData(" + JSONObject.quote(payload) + ")", null));
