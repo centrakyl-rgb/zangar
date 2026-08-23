@@ -209,7 +209,7 @@
     if(teachers.length&&groups.length)$("assignmentForm").onsubmit=saveAssignment;
     document.querySelectorAll("[data-deputy-scope]").forEach(function(b){b.onclick=async function(){b.disabled=true;var cur=b.dataset.current,want=b.dataset.deputyScope,next;if(cur==='both')next=want==='religious'?'secular':'religious';else if(cur===want)next='none';else if(cur==='none'||!cur)next=want;else next='both';try{await api("/rest/v1/profiles?id=eq."+b.dataset.id,{method:"PATCH",headers:{"Prefer":"return=minimal"},body:JSON.stringify({deputy_scope:next,is_deputy:next!=='none'})});await renderDirector()}catch(err){alert(err.message);b.disabled=false}}});
     document.querySelectorAll("[data-approve]").forEach(function(b){b.onclick=async function(){var id=b.dataset.approve,sel=document.querySelector('[data-role="'+id+'"]');b.disabled=true;try{await api("/rest/v1/rpc/approve_staff",{method:"POST",body:JSON.stringify({p_user:id,p_role:sel.value,p_name:b.closest(".item").querySelector("strong").textContent})});await renderDirector()}catch(err){alert(err.message);b.disabled=false}}});
-    await addSchedulePanel(false,false);
+    await addSchedulePanel(true,false);
   }
   async function createStaff(e){
     e.preventDefault();var name=$("newStaffName").value.trim(),loginName=$("newStaffLogin").value.trim().toLowerCase(),password=$("newStaffPassword").value,role=$("newStaffRole").value,email=loginName+"@akyl-center.app",button=e.target.querySelector("button");button.disabled=true;button.textContent="Создание…";
