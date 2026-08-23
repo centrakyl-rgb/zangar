@@ -75,9 +75,9 @@
   }
   function addProjectsSection(){
     var section=document.createElement("section");section.className="panel";section.innerHTML='<h3>Проекты и сбор</h3><div id="projectContent"><div class="empty">Обновляем сумму с сайта…</div></div>';$("dash").appendChild(section);
-    var cached=localStorage.getItem("akyl_project_data");if(cached)renderProjectData(cached);if(window.AkylNative){window.AkylNative.refreshProjects();if(!projectRefreshStarted){projectRefreshStarted=true;setInterval(function(){window.AkylNative.refreshProjects()},30*60*1000)}}
+    var cached=localStorage.getItem("akyl_project_data_v2");if(cached)renderProjectData(cached);if(window.AkylNative){window.AkylNative.refreshProjects();if(!projectRefreshStarted){projectRefreshStarted=true;setInterval(function(){window.AkylNative.refreshProjects()},30*60*1000)}}
   }
-  window.receiveProjectData=function(payload){localStorage.setItem("akyl_project_data",payload);renderProjectData(payload)};
+  window.receiveProjectData=function(payload){localStorage.removeItem("akyl_project_data");localStorage.setItem("akyl_project_data_v2",payload);renderProjectData(payload)};
   function renderProjectData(payload){
     var box=$("projectContent");if(!box)return;var d={};try{d=JSON.parse(payload)}catch(e){}var collected=Number(String(d.collected||"").replace(/[^0-9.]/g,"")),goal=Number(String(d.goal||"").replace(/[^0-9.]/g,"")),percent=goal?Math.min(100,Math.round(collected/goal*100)):0;
     var amount=collected?collected.toLocaleString("ru-RU")+" ₽":"Сумма на сайте",goalText=goal?"Цель: "+goal.toLocaleString("ru-RU")+" ₽":"Данные автоматически обновляются с сайта";
