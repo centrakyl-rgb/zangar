@@ -66,11 +66,11 @@ public class MainActivity extends Activity {
         }
         private String cleanAmount(String value,String context){
             if(value==null)return "";String clean=value.replaceAll("[\\s\\u00a0]", "").replace(',', '.');
-            try{double amount=Double.parseDouble(clean);String c=context==null?"":context.toLowerCase();if(c.contains("млн"))amount*=1000000;else if(c.contains("тыс"))amount*=1000;return String.valueOf((long)amount)}catch(Exception ignored){return clean;}
+            try{double amount=Double.parseDouble(clean);String c=context==null?"":context.toLowerCase();if(c.contains("млн"))amount*=1000000;else if(c.contains("тыс"))amount*=1000;return String.valueOf((long)amount);}catch(Exception ignored){return clean;}
         }
         private String findAmount(String text,String source,String label,String jsonKey){
-            String number="([0-9][0-9\\s\\u00a0.,]{0,20})";Matcher m=Pattern.compile("(?iu)"+label+"[^0-9]{0,160}"+number+"\\s*(?:млн|миллион(?:ов|а)?|тыс(?:яч)?)?").matcher(text);if(m.find())return cleanAmount(m.group(1),m.group());
-            m=Pattern.compile("(?iu)"+number+"\\s*(?:млн|миллион(?:ов|а)?|тыс(?:яч)?)?\\s*(?:₽|руб(?:лей|ля|\\.)?)?[^0-9]{0,100}"+label).matcher(text);if(m.find())return cleanAmount(m.group(1),m.group());
+            String number="([0-9][0-9\\s\\u00a0.,]{0,20})";Matcher m=Pattern.compile("(?isu)"+label+".{0,500}?"+number+"\\s*(?:млн|миллион(?:ов|а)?|тыс(?:яч)?|₽|руб(?:лей|ля|\\.))").matcher(text);if(m.find())return cleanAmount(m.group(1),m.group());
+            m=Pattern.compile("(?iu)"+number+"\\s*(?:млн|миллион(?:ов|а)?|тыс(?:яч)?|₽|руб(?:лей|ля|\\.))[^0-9]{0,100}"+label).matcher(text);if(m.find())return cleanAmount(m.group(1),m.group());
             m=Pattern.compile("(?iu)[\\\"']?"+jsonKey+"[\\\"']?\\s*[:=]\\s*[\\\"']?"+number).matcher(source);return m.find()?cleanAmount(m.group(1),m.group()):"";
         }
         private String findGoal(String text,String source){
