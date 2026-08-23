@@ -55,7 +55,7 @@ public class MainActivity extends Activity {
                     BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), "UTF-8"));StringBuilder html = new StringBuilder();String line;
                     while ((line = reader.readLine()) != null) html.append(line).append('\n');reader.close();
                     String source = html.toString(), text = source.replaceAll("(?is)<script.*?</script>|<style.*?</style>", " ").replaceAll("(?s)<[^>]+>", " ").replace("&nbsp;", " ").replace("&#8381;", "₽");
-                    String collected = findAmount(text, source, "(?:собрано|собрали|уже собрано)", "(?:collected|raised|currentAmount|current_amount)"), goal = findGoal(text, source);
+                    String collected = findCollected(text, source), goal = findGoal(text, source);
                     String telegram = findLink(source, "https?://(?:t\\.me|telegram\\.me)/[^\\\"'<> ]+");
                     String vk = findLink(source, "https?://(?:www\\.)?vk\\.(?:com|ru)/[^\\\"'<> ]+");
                     String max = findLink(source, "https?://(?:max\\.ru|web\\.max\\.ru)/[^\\\"'<> ]+");
@@ -67,6 +67,14 @@ public class MainActivity extends Activity {
         private String cleanAmount(String value,String context){
             if(value==null)return "";String clean=value.replaceAll("[\\s\\u00a0]", "").replace(',', '.');
             try{double amount=Double.parseDouble(clean);String c=context==null?"":context.toLowerCase();if(c.contains("млн"))amount*=1000000;else if(c.contains("тыс"))amount*=1000;return String.valueOf((long)amount);}catch(Exception ignored){return clean;}
+        }
+        private String findCollected(String text,String source){
+            String number="([0-9][0-9\\s\\u00a0.,]{0,20})";
+            Matcher m=Pattern.compile("(?isu)уже\\s+собрали\\s*"+number+"\\s*(?:₽|руб(?:лей|ля|\\.))").matcher(text);
+            if(m.find())return cleanAmount(m.group(1),m.group());
+            m=Pattern.compile("(?isu)собрано\\s+нужно\\s+[0-9]{1,3}%\\s*"+number+"\\s*(?:₽|руб(?:лей|ля|\\.))").matcher(text);
+            if(m.find())return cleanAmount(m.group(1),m.group());
+            return findAmount(text,source,"(?:собрано|собрали)","(?:collected|raised|currentAmount|current_amount)");
         }
         private String findAmount(String text,String source,String label,String jsonKey){
             String number="([0-9][0-9\\s\\u00a0.,]{0,20})";Matcher m=Pattern.compile("(?isu)"+label+".{0,5000}?"+number+"\\s*(?:млн|миллион(?:ов|а)?|тыс(?:яч)?|₽|руб(?:лей|ля|\\.))").matcher(text);if(m.find())return cleanAmount(m.group(1),m.group());
