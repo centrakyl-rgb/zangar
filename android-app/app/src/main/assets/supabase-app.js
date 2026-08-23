@@ -2,7 +2,7 @@
   "use strict";
   var URL="https://ihevokoybbchdsujcpls.supabase.co";
   var KEY="sb_publishable_36ExgycbIBA2Hd7ZmSEu_A_65KsGs-X";
-  var token="",refreshToken="",user=null,profile=null,assignments=[],loginDirectory=[];
+  var token="",refreshToken="",user=null,profile=null,assignments=[],loginDirectory=[],projectRefreshStarted=false;
   var $=function(id){return document.getElementById(id)};
   var esc=function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})};
   async function api(path,options){
@@ -65,12 +65,24 @@
     else if(profile.role==="educator")await renderEducator();
     else if(profile.role==="cleaner")await renderCleaner();
     else await renderAdmin();
+    addProjectsSection();
     if(["director","deputy","teacher","educator"].indexOf(profile.role)>=0)await addStudentDossier();
     addPasswordSection();
     $("dash").querySelectorAll(":scope > .hero").forEach(function(x){x.remove()});
     makeSectionsMenu();
     setupHelp();
     await renderHeaderNotifications();
+  }
+  function addProjectsSection(){
+    var section=document.createElement("section");section.className="panel";section.innerHTML='<h3>Проекты и сбор</h3><div id="projectContent"><div class="empty">Обновляем сумму с сайта…</div></div>';$("dash").appendChild(section);
+    var cached=localStorage.getItem("akyl_project_data");if(cached)renderProjectData(cached);if(window.AkylNative){window.AkylNative.refreshProjects();if(!projectRefreshStarted){projectRefreshStarted=true;setInterval(function(){window.AkylNative.refreshProjects()},30*60*1000)}}
+  }
+  window.receiveProjectData=function(payload){localStorage.setItem("akyl_project_data",payload);renderProjectData(payload)};
+  function renderProjectData(payload){
+    var box=$("projectContent");if(!box)return;var d={};try{d=JSON.parse(payload)}catch(e){}var collected=Number(String(d.collected||"").replace(/[^0-9.]/g,"")),goal=Number(String(d.goal||"").replace(/[^0-9.]/g,"")),percent=goal?Math.min(100,Math.round(collected/goal*100)):0;
+    var amount=collected?collected.toLocaleString("ru-RU")+" ₽":"Сумма на сайте",goalText=goal?"Цель: "+goal.toLocaleString("ru-RU")+" ₽":"Данные автоматически обновляются с сайта";
+    var links=[{n:"Открыть сайт",u:d.site||"https://mechet-zangar.ru/"},{n:"Telegram",u:d.telegram},{n:"MAX",u:d.max},{n:"ВКонтакте",u:d.vk}].filter(function(x){return x.u});
+    box.innerHTML='<div class="fundraising"><span>Собрано</span><strong>'+esc(amount)+'</strong><p>'+esc(goalText)+'</p>'+(goal?'<div class="progress"><span style="width:'+percent+'%"></span></div><p style="margin-bottom:0">'+percent+'% от цели</p>':'')+'</div><div class="social-links">'+links.map(function(x){return '<a class="btn" href="'+esc(x.u)+'">'+esc(x.n)+'</a>'}).join('')+'</div>';
   }
   function setupHelp(){
     var texts={director:"Расписание — просмотр занятий.\nПоставить задачу — поручения сотрудникам.\nКонтрольная сдача джуза — итоговая проверка на 100 баллов.\nДосье ученика — полная история обучения и сдач.",deputy:"Создавайте группы и добавляйте учеников. Проверяйте журналы, расписание и досье каждого ученика.",teacher:"Открывайте свой журнал, отмечайте сдачу урока и причину несдачи. В досье можно посмотреть историю ученика по доступным предметам.",educator:"Добавляйте воспитательные записи и контролируйте дежурства учеников.",admin:"Открывайте назначенные директором задачи и отмечайте их выполнение.",cleaner:"В конце рабочего дня подтвердите уборку или коротко укажите проблему."};
@@ -314,12 +326,13 @@
     function category(title){
       if(/Досье|воспитател|Дежур|ученик/i.test(title)&&!/Сравнение/i.test(title))return "students";
       if(/журнал|запис|сдач|успеваем|Сравнение|Итог сегодняшнего дня|Новая запись/i.test(title))return "journal";
+      if(/Проекты|сбор/i.test(title))return "projects";
       if(/Безопасность|сотрудник|Заместитель|Предметы учителей|Добавить|Новые сотрудники/i.test(title))return "more";
       return "home";
     }
     panels.forEach(function(panel){var b=panel.querySelector(".section-toggle"),title=b?b.textContent.trim():"";panel.dataset.navCategory=category(title)});
-    var nav=document.createElement("nav");nav.className="dashboard-nav";nav.innerHTML='<button class="nav-button active" data-nav="home"><span>⌂</span>Главная</button><button class="nav-button" data-nav="journal"><span>▤</span>Журнал</button><button class="nav-button" data-nav="students"><span>♙</span>Ученики</button><button class="nav-button" data-nav="more"><span>•••</span>Ещё</button>';document.body.appendChild(nav);
-    function show(name){panels.forEach(function(panel){panel.classList.toggle("nav-hidden",panel.dataset.navCategory!==name)});nav.querySelectorAll(".nav-button").forEach(function(b){b.classList.toggle("active",b.dataset.nav===name)});hint.textContent={home:"Главная",journal:"Журнал и успеваемость",students:"Ученики",more:"Управление"}[name];window.scrollTo({top:0,behavior:"smooth"})}
+    var nav=document.createElement("nav");nav.className="dashboard-nav";nav.innerHTML='<button class="nav-button active" data-nav="home"><span>⌂</span>Главная</button><button class="nav-button" data-nav="journal"><span>▤</span>Журнал</button><button class="nav-button" data-nav="students"><span>♙</span>Ученики</button><button class="nav-button" data-nav="projects"><span>◆</span>Проекты</button><button class="nav-button" data-nav="more"><span>•••</span>Ещё</button>';document.body.appendChild(nav);
+    function show(name){panels.forEach(function(panel){panel.classList.toggle("nav-hidden",panel.dataset.navCategory!==name)});nav.querySelectorAll(".nav-button").forEach(function(b){b.classList.toggle("active",b.dataset.nav===name)});hint.textContent={home:"Главная",journal:"Журнал и успеваемость",students:"Ученики",projects:"Проекты центра",more:"Управление"}[name];window.scrollTo({top:0,behavior:"smooth"})}
     nav.querySelectorAll(".nav-button").forEach(function(b){b.onclick=function(){show(b.dataset.nav)}});show("home");
   }
   var pullStart=0,pullReady=false;
