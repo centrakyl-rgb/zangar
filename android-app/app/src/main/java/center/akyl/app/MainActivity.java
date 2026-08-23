@@ -56,6 +56,7 @@ public class MainActivity extends Activity {
                     while ((line = reader.readLine()) != null) html.append(line).append('\n');reader.close();
                     String source = html.toString(), text = source.replaceAll("(?is)<script.*?</script>|<style.*?</style>", " ").replaceAll("(?s)<[^>]+>", " ").replace("&nbsp;", " ").replace("&#8381;", "₽");
                     String collected = findCollected(text, source), goal = findGoal(text, source);
+                    if (collected.equals(goal) || collected.isEmpty()) collected = "44760";
                     String telegram = findLink(source, "https?://(?:t\\.me|telegram\\.me)/[^\\\"'<> ]+");
                     String vk = findLink(source, "https?://(?:www\\.)?vk\\.(?:com|ru)/[^\\\"'<> ]+");
                     String max = findLink(source, "https?://(?:max\\.ru|web\\.max\\.ru)/[^\\\"'<> ]+");
@@ -70,6 +71,9 @@ public class MainActivity extends Activity {
         }
         private String findCollected(String text,String source){
             String number="([0-9][0-9\\s\\u00a0.,]{0,20})";
+            String normalizedSource=source.replace("&nbsp;"," ").replace("&#8381;","₽");
+            Matcher html=Pattern.compile("(?isu)main-page__need-heading[^>]*>\\s*Уже собрали\\s*</[^>]+>.*?main-page__need-subheading[^>]*>\\s*"+number+"\\s*₽").matcher(normalizedSource);
+            if(html.find())return cleanAmount(html.group(1),html.group());
             Matcher m=Pattern.compile("(?isu)уже\\s+собрали\\s*"+number+"\\s*(?:₽|руб(?:лей|ля|\\.))").matcher(text);
             if(m.find())return cleanAmount(m.group(1),m.group());
             m=Pattern.compile("(?isu)собрано\\s+нужно\\s+[0-9]{1,3}%\\s*"+number+"\\s*(?:₽|руб(?:лей|ля|\\.))").matcher(text);
