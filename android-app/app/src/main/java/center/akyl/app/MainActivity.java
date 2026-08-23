@@ -1,9 +1,12 @@
 package center.akyl.app;
 
 import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
 import android.view.WindowInsets;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -26,7 +29,26 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
 
         webView = new WebView(this);
-        webView.setWebViewClient(new WebViewClient());
+        webView.setWebViewClient(new WebViewClient() {
+            private boolean openExternal(String url) {
+                if (url == null || url.startsWith("file:///android_asset/")) return false;
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+                } catch (Exception first) {
+                    if (url.startsWith("tg:")) {
+                        String username = Uri.parse(url).getQueryParameter("domain");
+                        if (username != null) startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/" + username)));
+                    }
+                }
+                return true;
+            }
+            @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                return openExternal(request.getUrl().toString());
+            }
+            @Override public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                return openExternal(url);
+            }
+        });
         webView.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
             @Override public WindowInsets onApplyWindowInsets(View view, WindowInsets insets) {
                 view.setPadding(0, insets.getSystemWindowInsetTop(), 0, insets.getSystemWindowInsetBottom());
