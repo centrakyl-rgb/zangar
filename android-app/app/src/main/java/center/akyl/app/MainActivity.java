@@ -1,7 +1,14 @@
 package center.akyl.app;
 
 import android.app.Activity;
+import android.Manifest;
+import android.app.AlarmManager;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Intent;
+import android.content.Context;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
@@ -13,6 +20,7 @@ import android.webkit.WebViewClient;
 import android.webkit.JavascriptInterface;
 
 import org.json.JSONObject;
+import org.json.JSONArray;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -20,6 +28,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.Calendar;
 
 public class MainActivity extends Activity {
     private WebView webView;
@@ -27,6 +36,12 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            NotificationManager manager=(NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
+            manager.createNotificationChannel(new NotificationChannel("lessons","Уроки и перемены",NotificationManager.IMPORTANCE_HIGH));
+        }
+        if (android.os.Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},1001);
 
         webView = new WebView(this);
         webView.setWebViewClient(new WebViewClient() {
@@ -67,6 +82,21 @@ public class MainActivity extends Activity {
     }
 
     private class ProjectBridge {
+        @JavascriptInterface
+        public void scheduleNotifications(String payload) {
+            try {
+                JSONArray rows=new JSONArray(payload);AlarmManager alarm=(AlarmManager)getSystemService(Context.ALARM_SERVICE);Calendar now=Calendar.getInstance();
+                for(int i=0;i<rows.length();i++){
+                    JSONObject row=rows.getJSONObject(i);int weekday=row.optInt("weekday"),id=row.optString("id",String.valueOf(i)).hashCode();String time=row.optString("lesson_time","08:00").substring(0,5);String[] hm=time.split(":");
+                    String subject=row.optJSONObject("subjects")!=null?row.optJSONObject("subjects").optString("name","Урок"):"Урок";String group=row.optJSONObject("groups")!=null?row.optJSONObject("groups").optString("name",""):"";
+                    Calendar start=nextLesson(now,weekday,Integer.parseInt(hm[0]),Integer.parseInt(hm[1]));
+                    scheduleAlarm(alarm,id*2,start.getTimeInMillis(),"Урок начался",subject+(group.isEmpty()?"":" · "+group));
+                    Calendar end=(Calendar)start.clone();end.add(Calendar.MINUTE,45);scheduleAlarm(alarm,id*2+1,end.getTimeInMillis(),"Перемена",subject+" завершён");
+                }
+            } catch(Exception ignored) {}
+        }
+        private Calendar nextLesson(Calendar now,int weekday,int hour,int minute){Calendar c=(Calendar)now.clone();int target=weekday+1,delta=(target-c.get(Calendar.DAY_OF_WEEK)+7)%7;c.add(Calendar.DAY_OF_YEAR,delta);c.set(Calendar.HOUR_OF_DAY,hour);c.set(Calendar.MINUTE,minute);c.set(Calendar.SECOND,0);c.set(Calendar.MILLISECOND,0);if(c.getTimeInMillis()<=now.getTimeInMillis())c.add(Calendar.DAY_OF_YEAR,7);return c;}
+        private void scheduleAlarm(AlarmManager alarm,int code,long trigger,String title,String message){Intent intent=new Intent(MainActivity.this,NotificationReceiver.class);intent.putExtra("title",title);intent.putExtra("message",message);intent.putExtra("code",code);intent.putExtra("trigger",trigger);PendingIntent pending=PendingIntent.getBroadcast(MainActivity.this,code,intent,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);alarm.setWindow(AlarmManager.RTC_WAKEUP,trigger,60000,pending);}
         @JavascriptInterface
         public void refreshProjects() {
             new Thread(() -> {
