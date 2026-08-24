@@ -72,13 +72,13 @@ public class MainActivity extends Activity {
             new Thread(() -> {
                 String result = "{\"site\":\"https://mechet-zangar.ru/\"}";
                 try {
-                    HttpURLConnection connection = (HttpURLConnection) new URL("https://mechet-zangar.ru/").openConnection();
-                    connection.setConnectTimeout(12000);connection.setReadTimeout(12000);connection.setRequestProperty("User-Agent", "Mozilla/5.0 AkylCenter/1.0");
+                    HttpURLConnection connection = (HttpURLConnection) new URL("https://mechet-zangar.ru/?akyl_refresh=" + System.currentTimeMillis()).openConnection();
+                    connection.setUseCaches(false);connection.setConnectTimeout(12000);connection.setReadTimeout(12000);connection.setRequestProperty("Cache-Control", "no-cache, no-store, max-age=0");connection.setRequestProperty("Pragma", "no-cache");connection.setRequestProperty("User-Agent", "Mozilla/5.0 AkylCenter/1.0");
                     BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), "UTF-8"));StringBuilder html = new StringBuilder();String line;
                     while ((line = reader.readLine()) != null) html.append(line).append('\n');reader.close();
                     String source = html.toString(), text = source.replaceAll("(?is)<script.*?</script>|<style.*?</style>", " ").replaceAll("(?s)<[^>]+>", " ").replace("&nbsp;", " ").replace("&#8381;", "₽");
                     String collected = findCollected(text, source), goal = findGoal(text, source);
-                    if (collected.equals(goal) || collected.isEmpty()) collected = "44760";
+                    if (collected.equals(goal)) collected = "";
                     String telegram = "https://t.me/zangar_masjid";
                     String vk = "https://vk.ru/mechet_zangar";
                     String max = "https://max.ru/join/hZ_if71_D-7cTA1pHZ6_-pgPJuiJIJgaaVvSl-anxSM";
