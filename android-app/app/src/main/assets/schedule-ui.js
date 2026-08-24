@@ -29,7 +29,7 @@
     }).join("");
   }
 
-  function update(){improveEditor();addDemo()}
+  function setupPrint(){var button=document.getElementById("printSchedule");if(!button||button.dataset.nativePrint)return;button.dataset.nativePrint="1";button.onclick=function(){var filter=document.getElementById("scheduleFilter");if(filter){filter.value="all";filter.dispatchEvent(new Event("change"))}setTimeout(function(){if(window.AkylNative&&window.AkylNative.printPage)window.AkylNative.printPage();else window.print()},150)}}\n\n  function update(){improveEditor();addDemo();setupPrint()}
   new MutationObserver(update).observe(document.getElementById("app"),{subtree:true,childList:true});
   update();
 })();
