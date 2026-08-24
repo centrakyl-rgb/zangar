@@ -79,7 +79,7 @@
   }
   window.receiveProjectData=function(payload){localStorage.removeItem("akyl_project_data");localStorage.setItem("akyl_project_data_v2",payload);renderProjectData(payload)};
   function renderProjectData(payload){
-    var box=$("projectContent");if(!box)return;var d={};try{d=JSON.parse(payload)}catch(e){}var collected=Number(String(d.collected||"").replace(/[^0-9.]/g,"")),goal=Number(String(d.goal||"").replace(/[^0-9.]/g,""));if(!collected||(goal&&collected>=goal))collected=44760;var percent=goal?Math.min(100,Math.round(collected/goal*100)):0;
+    var box=$("projectContent");if(!box)return;var d={};try{d=JSON.parse(payload)}catch(e){}var collected=Number(String(d.collected||"").replace(/[^0-9.]/g,"")),goal=Number(String(d.goal||"").replace(/[^0-9.]/g,""));if(!collected||(goal&&collected>=goal)){box.innerHTML='<div class="empty">Не удалось обновить сумму. Потяните страницу вниз.</div>';return}var percent=goal?Math.min(100,Math.round(collected/goal*100)):0;
     var amount=collected?collected.toLocaleString("ru-RU")+" ₽":"Сумма на сайте",goalText=goal?"Цель: "+goal.toLocaleString("ru-RU")+" ₽":"Данные автоматически обновляются с сайта";
     var links=[{n:"Открыть сайт",u:d.site||"https://mechet-zangar.ru/"},{n:"Telegram",u:d.telegram},{n:"MAX",u:d.max},{n:"ВКонтакте",u:d.vk}].filter(function(x){return x.u});
     box.innerHTML='<div class="fundraising"><span>Собрано</span><strong>'+esc(amount)+'</strong><p>'+esc(goalText)+'</p>'+(goal?'<div class="progress"><span style="width:'+percent+'%"></span></div><p style="margin-bottom:0">'+percent+'% от цели</p>':'')+'</div><div class="social-links">'+links.map(function(x){return '<a class="btn" href="'+esc(x.u)+'">'+esc(x.n)+'</a>'}).join('')+'</div>';
