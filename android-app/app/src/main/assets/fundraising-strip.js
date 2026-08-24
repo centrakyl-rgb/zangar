@@ -1,5 +1,6 @@
 (function(){
   "use strict";
+  var scheduleScript=document.createElement("script");scheduleScript.src="schedule-ui.js";document.head.appendChild(scheduleScript);
   var strip=document.getElementById("collectionStrip"),value=document.getElementById("collectionStripValue"),role=document.getElementById("role"),dash=document.getElementById("dash");
   if(!strip||!value||!role||!dash)return;
 
