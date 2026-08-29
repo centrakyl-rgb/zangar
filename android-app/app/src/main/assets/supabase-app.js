@@ -2,17 +2,49 @@
   "use strict";
   var URL="https://ihevokoybbchdsujcpls.supabase.co";
   var KEY="sb_publishable_36ExgycbIBA2Hd7ZmSEu_A_65KsGs-X";
-  var token="",refreshToken="",user=null,profile=null,assignments=[],loginDirectory=[],projectRefreshStarted=false,activeNav="home";
+  var REQUEST_TIMEOUT_MS=12000;
+  var FALLBACK_DIRECTORY=[
+    {full_name:"Рушан Садрутдинов",role:"director",login_email:"centrakyl@gmail.com"},
+    {full_name:"Ибраһим Ягафаров",role:"teacher",login_email:"linar.kadyrovitch@gmail.com"}
+  ];
+  var token="",refreshToken="",sessionExpiresAt=0,user=null,profile=null,assignments=[],loginDirectory=[],projectRefreshStarted=false,activeNav="home";
   var $=function(id){return document.getElementById(id)};
   var esc=function(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})};
   async function api(path,options){
-    options=options||{};var headers={"apikey":KEY,"Content-Type":"application/json"};
-    if(token)headers.Authorization="Bearer "+token;
+    options=options||{};
+    var sendAuth=options.auth!==false,keepSessionOn401=options.keepSessionOn401===true;
+    var headers={"apikey":KEY,"Content-Type":"application/json"};
+    if(sendAuth&&token)headers.Authorization="Bearer "+token;
     Object.assign(headers,options.headers||{});
-    var res=await fetch(URL+path,Object.assign({},options,{headers:headers}));
-    var text=await res.text(),data=text?JSON.parse(text):null;
-    if(!res.ok)throw new Error((data&&(data.msg||data.message||data.hint))||"Ошибка сервера");
+    var externalSignal=options.signal||null;
+    var controller=!externalSignal&&window.AbortController?new AbortController():null;
+    var timer=controller?setTimeout(function(){controller.abort()},REQUEST_TIMEOUT_MS):null;
+    var request=Object.assign({},options,{headers:headers,signal:externalSignal||(controller?controller.signal:undefined)});
+    delete request.auth;delete request.keepSessionOn401;
+    var res,text,data=null;
+    try{res=await fetch(URL+path,request);text=await res.text()}
+    catch(error){throw new Error(error&&error.name==="AbortError"?"Сервер не ответил за 12 секунд":"Нет связи с сервером")}
+    finally{if(timer)clearTimeout(timer)}
+    if(text){try{data=JSON.parse(text)}catch(e){data={message:text}}}
+    if(!res.ok){
+      var error=new Error((data&&(data.msg||data.message||data.hint))||"Ошибка сервера");
+      error.status=res.status;error.code=data&&data.code;
+      if(res.status===401&&sendAuth&&!keepSessionOn401){clearSession();showLogin("Сеанс истёк. Войдите снова.");loadLoginDirectory()}
+      throw error;
+    }
     return data;
+  }
+  function accessTokenExpiry(value){
+    try{var payload=value.split(".")[1].replace(/-/g,"+").replace(/_/g,"/");while(payload.length%4)payload+="=";return Number(JSON.parse(atob(payload)).exp||0)*1000}
+    catch(e){return 0}
+  }
+  function clearSession(){
+    localStorage.removeItem("akyl_auth");
+    try{
+      for(var i=localStorage.length-1;i>=0;i--){var key=localStorage.key(i)||"";if(/^sb-.*-auth-token$/i.test(key)||/supabase.*auth/i.test(key))localStorage.removeItem(key)}
+      sessionStorage.clear();
+    }catch(e){}
+    token="";refreshToken="";sessionExpiresAt=0;user=null;profile=null;
   }
   function showLogin(message){
     var nav=document.querySelector(".dashboard-nav");if(nav)nav.remove();
@@ -20,20 +52,32 @@
     if(message)$("error").textContent=message;
   }
   async function login(email,password){
-    var data=await api("/auth/v1/token?grant_type=password",{method:"POST",body:JSON.stringify({email:email,password:password})});
-    token=data.access_token;refreshToken=data.refresh_token||"";user=data.user;saveAuth();
+    var data=await api("/auth/v1/token?grant_type=password",{method:"POST",body:JSON.stringify({email:email,password:password}),auth:false});
+    token=data.access_token;refreshToken=data.refresh_token||"";user=data.user;saveAuth(data);
     await loadProfile();
   }
-  function saveAuth(){localStorage.setItem("akyl_auth",JSON.stringify({token:token,refreshToken:refreshToken,user:user}))}
-  async function refreshSession(){
-    if(!refreshToken)throw new Error("Сеанс закончился");
-    var data=await api("/auth/v1/token?grant_type=refresh_token",{method:"POST",body:JSON.stringify({refresh_token:refreshToken})});
-    token=data.access_token;refreshToken=data.refresh_token||refreshToken;user=data.user||user;saveAuth();
+  function saveAuth(data){
+    sessionExpiresAt=Number(data&&data.expires_at?data.expires_at*1000:0)||accessTokenExpiry(token)||Date.now()+Number(data&&data.expires_in||3600)*1000;
+    localStorage.setItem("akyl_auth",JSON.stringify({token:token,refreshToken:refreshToken,expiresAt:sessionExpiresAt,user:user}));
   }
-  async function loadLoginDirectory(){try{loginDirectory=await api("/rest/v1/rpc/login_directory",{method:"POST",body:"{}"});renderLoginPeople()}catch(e){$("loginPerson").innerHTML='<option value="">Сначала выполните обновление базы</option>'}}
+  async function refreshSession(signal){
+    if(!refreshToken)throw new Error("Сеанс закончился");
+    var data=await api("/auth/v1/token?grant_type=refresh_token",{method:"POST",body:JSON.stringify({refresh_token:refreshToken}),auth:false,signal:signal});
+    token=data.access_token;refreshToken=data.refresh_token||refreshToken;user=data.user||user;saveAuth(data);
+  }
+  async function loadLoginDirectory(){
+    var cached=[];try{cached=JSON.parse(localStorage.getItem("akyl_login_directory")||"[]")}catch(e){}
+    loginDirectory=cached.length?cached:FALLBACK_DIRECTORY.slice();renderLoginPeople();
+    $("error").textContent=cached.length?"":"Показан резервный список. Проверяем сервер…";
+    try{
+      var fresh=await api("/rest/v1/rpc/login_directory",{method:"POST",body:"{}",auth:false});
+      if(fresh&&fresh.length){loginDirectory=fresh;localStorage.setItem("akyl_login_directory",JSON.stringify(fresh));renderLoginPeople()}
+      $("error").textContent="";
+    }catch(e){$("error").textContent="Сервер временно не ответил. Можно войти из показанного списка."}
+  }
   function renderLoginPeople(){var role=$("loginRole").value,people=loginDirectory.filter(function(p){return p.role===role});$("loginPerson").innerHTML=people.map(function(p){return '<option value="'+esc(p.login_email)+'">'+esc(p.full_name)+'</option>'}).join('')||'<option value="">Сотрудники не добавлены</option>';$("personField").classList.toggle("hidden",people.length===1)}
-  async function loadProfile(){
-    var rows=await api("/rest/v1/profiles?id=eq."+encodeURIComponent(user.id)+"&select=id,full_name,role,active,is_deputy,deputy_scope");
+  async function loadProfile(options){
+    var rows=await api("/rest/v1/profiles?id=eq."+encodeURIComponent(user.id)+"&select=id,full_name,role,active,is_deputy,deputy_scope",options||{});
     if(!rows.length)throw new Error("Для этого пользователя ещё не назначена роль");
     profile=rows[0];if(!profile.active)throw new Error("Регистрация принята. Директор ещё не назначил вам роль.");
     $("login").classList.add("hidden");$("app").classList.remove("hidden");
@@ -54,7 +98,7 @@
   $("loginPerson").onchange=function(){$("passwordOnce").classList.add("hidden");$("password").value="";$("error").textContent=""};
   $("logout").onclick=async function(){
     try{await api("/auth/v1/logout",{method:"POST"})}catch(e){}
-    localStorage.removeItem("akyl_auth");token="";refreshToken="";user=null;profile=null;$("password").value="";showLogin();await loadLoginDirectory();
+    clearSession();$("password").value="";showLogin();await loadLoginDirectory();
   };
   async function render(){
     var oldNav=document.querySelector(".dashboard-nav");if(oldNav)oldNav.remove();
@@ -351,5 +395,26 @@
   document.addEventListener("touchstart",function(e){if(window.scrollY===0&&profile){pullStart=e.touches[0].clientY;pullReady=false}}, {passive:true});
   document.addEventListener("touchmove",function(e){if(!pullStart)return;var distance=e.touches[0].clientY-pullStart;if(distance>85){pullReady=true;var d=$("pullRefresh");if(!d){d=document.createElement("div");d.id="pullRefresh";d.className="empty";d.style.cssText="position:fixed;top:8px;left:25%;width:50%;z-index:20;background:#fff;border-radius:20px;box-shadow:0 4px 18px #0002";document.body.appendChild(d)}d.textContent="Отпустите, чтобы обновить"}}, {passive:true});
   document.addEventListener("touchend",async function(){var d=$("pullRefresh");if(d)d.remove();var ready=pullReady;pullStart=0;pullReady=false;if(ready&&profile){$("dash").innerHTML='<div class="empty">Обновление…</div>';try{await render()}catch(err){alert(err.message)}}}, {passive:true});
-  try{var saved=JSON.parse(localStorage.getItem("akyl_auth")||"null");if(saved&&saved.user){token=saved.token||"";refreshToken=saved.refreshToken||"";user=saved.user;loadProfile().catch(async function(){try{await refreshSession();await loadProfile()}catch(err){localStorage.removeItem("akyl_auth");showLogin("Войдите снова.");await loadLoginDirectory()}})}else loadLoginDirectory()}catch(e){loadLoginDirectory()}
+  async function restoreSavedSession(saved){
+    token=saved.token||"";refreshToken=saved.refreshToken||"";sessionExpiresAt=Number(saved.expiresAt||0)||accessTokenExpiry(token);user=saved.user;
+    if(!user)throw new Error("Сеанс не найден");
+    var controller=window.AbortController?new AbortController():null;
+    var timer=controller?setTimeout(function(){controller.abort()},REQUEST_TIMEOUT_MS):null;
+    var signal=controller?controller.signal:undefined,refreshed=false;
+    try{
+      if(!token||!sessionExpiresAt||sessionExpiresAt<=Date.now()+60000){await refreshSession(signal);refreshed=true}
+      try{await loadProfile({signal:signal,keepSessionOn401:true})}
+      catch(error){
+        if(error&&error.status===401&&refreshToken&&!refreshed){await refreshSession(signal);refreshed=true;await loadProfile({signal:signal,keepSessionOn401:true})}
+        else throw error;
+      }
+    }finally{if(timer)clearTimeout(timer)}
+  }
+  showLogin();
+  loadLoginDirectory();
+  try{
+    var saved=JSON.parse(localStorage.getItem("akyl_auth")||"null");
+    if(saved&&saved.user){restoreSavedSession(saved).catch(function(){clearSession();showLogin("Войдите снова.")})}
+    else clearSession();
+  }catch(e){clearSession();showLogin();loadLoginDirectory()}
 })();
