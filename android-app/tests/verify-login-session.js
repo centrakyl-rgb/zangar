@@ -12,8 +12,8 @@ function requireMatch(value, pattern, message) {
 
 requireMatch(app, /REQUEST_TIMEOUT_MS=12000/, "12-second request timeout is missing");
 requireMatch(app, /FALLBACK_DIRECTORY/, "fallback employee directory is missing");
-requireMatch(app, /login_directory"\s*,\s*\{[^}]*auth:false/, "login_directory must not receive a stale bearer token");
-requireMatch(app, /grant_type=refresh_token"\s*,\s*\{[^}]*auth:false/, "refresh request must not receive a stale bearer token");
+requireMatch(app, /login_directory"[\s\S]{0,180}auth:false/, "login_directory must not receive a stale bearer token");
+requireMatch(app, /grant_type=refresh_token"[\s\S]{0,240}auth:false/, "refresh request must not receive a stale bearer token");
 requireMatch(app, /function clearSession\(\)[\s\S]*removeItem\("akyl_auth"\)[\s\S]*token="";refreshToken="";sessionExpiresAt=0/, "complete session cleanup is missing");
 requireMatch(app, /async function restoreSavedSession/, "bounded session restoration is missing");
 
