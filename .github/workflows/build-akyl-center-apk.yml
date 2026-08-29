@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build and verify Akyl Center APK
 
 on:
   workflow_dispatch:
@@ -14,9 +14,16 @@ on:
       - "android-app/**"
       - ".github/workflows/build-akyl-center-apk.yml"
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      EXPECTED_PACKAGE_ID: center.akyl.app.live11
+      EXPECTED_VERSION_CODE: "7"
+      EXPECTED_CERT_SHA256: eabb9b7c32b5ae21549a172d75c6749dc820fb683bda73604b15cb7cafd9449c
 
     steps:
       - name: Checkout
@@ -33,18 +40,58 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Restore stable test signing key
-        uses: actions/cache@v4
-        with:
-          path: ~/.android/debug.keystore
-          key: akyl-center-debug-signing-v1
+      - name: Check login JavaScript and release identity
+        run: |
+          node --check android-app/app/src/main/assets/supabase-app.js
+          node android-app/tests/verify-login-session.js
 
-      - name: Build debug APK
+      - name: Restore authorized signing key
+        env:
+          AKYL_KEYSTORE_BASE64: ${{ secrets.AKYL_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$AKYL_KEYSTORE_BASE64" ]; then
+            echo "AKYL_KEYSTORE_BASE64 is required; refusing to create an APK with another certificate." >&2
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/akyl-signing"
+          printf '%s' "$AKYL_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/akyl-signing/akyl-release.jks"
+          echo "AKYL_KEYSTORE_PATH=$RUNNER_TEMP/akyl-signing/akyl-release.jks" >> "$GITHUB_ENV"
+
+      - name: Build signed release APK
         working-directory: android-app
-        run: gradle assembleDebug
+        env:
+          AKYL_KEYSTORE_PASSWORD: ${{ secrets.AKYL_KEYSTORE_PASSWORD }}
+          AKYL_KEY_ALIAS: ${{ secrets.AKYL_KEY_ALIAS }}
+          AKYL_KEY_PASSWORD: ${{ secrets.AKYL_KEY_PASSWORD }}
+        run: gradle assembleRelease
 
-      - name: Upload APK
+      - name: Verify APK release gates
+        run: |
+          APK="android-app/app/build/outputs/apk/release/app-release.apk"
+          OUT="android-app/app/build/outputs/apk/release/akyl-center-2.1.3-v7.apk"
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+
+          unzip -t "$APK"
+          "$BUILD_TOOLS/zipalign" -c -P 16 4 "$APK"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
+
+          CERT_SHA256="$("$BUILD_TOOLS/apksigner" verify --print-certs "$APK" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1 | tr '[:upper:]' '[:lower:]' | tr -d ':')"
+          test "$CERT_SHA256" = "$EXPECTED_CERT_SHA256"
+
+          BADGING="$("$BUILD_TOOLS/aapt" dump badging "$APK")"
+          printf '%s\n' "$BADGING" | grep -F "package: name='$EXPECTED_PACKAGE_ID'"
+          printf '%s\n' "$BADGING" | grep -F "versionCode='$EXPECTED_VERSION_CODE'"
+
+          unzip -p "$APK" assets/supabase-app.js | grep -F 'REQUEST_TIMEOUT_MS=12000'
+          unzip -p "$APK" assets/supabase-app.js | grep -F 'restoreSavedSession'
+          unzip -p "$APK" assets/supabase-app.js | grep -F 'auth:false'
+
+          cp "$APK" "$OUT"
+          sha256sum "$OUT"
+
+      - name: Upload verified APK
         uses: actions/upload-artifact@v4
         with:
-          name: akyl-center-debug-apk
-          path: android-app/app/build/outputs/apk/debug/app-debug.apk
+          name: akyl-center-2.1.3-v7-verified
+          path: android-app/app/build/outputs/apk/release/akyl-center-2.1.3-v7.apk
+          if-no-files-found: error
